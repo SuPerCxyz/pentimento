@@ -1,4 +1,4 @@
-# User Guide
+# 用户指南
 
 Pentimento 在普通代码编辑器中高亮 Git Patch 引入的新增内容,保留真实代码上下文与全部语言服务能力。
 

@@ -1,29 +1,29 @@
-# Changelog
+# 更新日志
 
-All notable changes to Pentimento will be documented in this file.
+Pentimento 所有重要变更将记录在本文件中。
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+本项目遵循 [语义化版本](https://semver.org/spec/v2.0.0.html)。
 
 ## [Unreleased]
 
-### Added - Stage 1 (project scaffolding)
+### Added - Stage 1(项目脚手架)
 
-- Initialized `pentimento` repository and VSCode extension project.
-- `package.json` with full command contract (32 `pentimento.*` commands),
-  full configuration contract, color contract (6 layers + overlap/modified/
-  ambiguous), and an Activity Bar view container for `PENTIMENTO`.
-- TypeScript + esbuild + ESLint (flat config) + Mocha + Chai +
-  `@vscode/test-electron` toolchain.
-- `README.md` and `README.zh-CN.md` with the "Why the name Pentimento?" /
-  "为什么叫 Pentimento?" sections.
-- `docs/TECHNICAL_DESIGN.md` (technical design, confirmed) and
-  `docs/IMPLEMENTATION_STATUS.md` (progress tracker).
-- Minimal `src/extension.ts` activation: Output Channel `Pentimento`,
-  context keys, command stubs, and an empty Patches tree view.
-- Minimal unit-test scaffolding.
+- 初始化 `pentimento` 仓库与 VSCode 扩展项目。
+- `package.json` 包含完整命令契约(32 个 `pentimento.*` 命令)、
+  完整配置契约、颜色契约(6 层 + overlap/modified/ambiguous)、
+  以及 `PENTIMENTO` Activity Bar view container。
+- TypeScript + esbuild + ESLint(flat config)+ Mocha + Chai +
+  `@vscode/test-electron` 工具链。
+- `README.md` 与 `README.zh-CN.md`,分别包含 "Why the name Pentimento?" /
+  "为什么叫 Pentimento?" 章节。
+- `docs/TECHNICAL_DESIGN.md`(技术设计,已确认)与
+  `docs/IMPLEMENTATION_STATUS.md`(进度跟踪)。
+- 最小化 `src/extension.ts` 激活:Output Channel `Pentimento`、
+  context keys、命令桩、空 Patches tree view。
+- 最小化单元测试脚手架。
 
 ### Notes
 
-- No user-facing highlight functionality yet; commands are registered as
-  placeholders. Implementation begins in Stage 2 (GitRunner).
+- 尚无面向用户的高亮功能;命令以占位符形式注册。
+  实现从 Stage 2(GitRunner)开始。

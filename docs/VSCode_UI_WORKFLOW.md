@@ -1,4 +1,4 @@
-# VSCode UI Workflow
+# VSCode UI 工作流
 
 Pentimento 的所有用户操作通过标准 VSCode UI 完成。**不需要打开终端、不手敲 Git 命令、不手编 settings/launch、不访问远端网页。** Git 仅由插件后台安全执行。
 

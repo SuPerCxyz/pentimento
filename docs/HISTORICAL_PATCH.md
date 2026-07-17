@@ -1,4 +1,4 @@
-# Historical Patch
+# 历史 Patch
 
 历史 Patch 指非当前 HEAD 的提交引入的变化。Pentimento 严格区分坐标空间,**绝不把历史旧行号直接套到当前 HEAD**。
 

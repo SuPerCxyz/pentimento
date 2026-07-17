@@ -1,4 +1,4 @@
-# Architecture
+# 架构
 
 Pentimento 在普通 VSCode `TextEditor` 中高亮 Git Patch 引入的新增内容,不使用 Diff Editor / WebView / 虚拟文档,也不修改用户文件。本文描述模块分层与数据流,详见 `TECHNICAL_DESIGN.md`。
 

@@ -1,4 +1,4 @@
-# Extension Compatibility
+# 扩展兼容性
 
 Pentimento 是守规矩的 VSCode 扩展,与 GitLens、git gutter、诊断、搜索、覆盖率、断点、调试等共存。
 

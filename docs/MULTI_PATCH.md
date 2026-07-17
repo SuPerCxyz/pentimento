@@ -1,4 +1,4 @@
-# Multi Patch
+# 多 Patch
 
 Pentimento 从数据模型第一天即支持多 Patch 图层,**无单一全局 `activePatch`**。
 
