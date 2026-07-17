@@ -6,20 +6,26 @@ import { PatchFilesTreeProvider } from './tree/patchFilesTreeProvider';
 import { GitRunner } from './git/gitRunner';
 import { detectGitVersion, formatVersion, isSupported } from './git/gitVersion';
 import { RepositoryResolver } from './git/repositoryResolver';
+import { RevisionResolver } from './git/revisionResolver';
+import { CommitProvider } from './git/commitProvider';
 import { BlameProvider } from './git/blameProvider';
+import { PatchService } from './patch/patchService';
 import { GitCommitHoverProvider } from './hover/gitCommitHoverProvider';
+import { DecorationManager, decorationConfigFromSettings } from './highlight/decorationManager';
+import { HighlightSessionManager } from './highlight/highlightSessionManager';
+import { HighlightController } from './highlight/highlightController';
+import { EditorTracker } from './highlight/editorTracker';
 
 /**
  * Pentimento 扩展入口。
  *
- * 阶段 3:接入 RepositoryResolver / BlameProvider / GitCommitHoverProvider,
- * 提供行级 Git Hover(与 GitLens 共存)。
+ * 阶段 6:接入完整服务链(Repository/Revision/Commit/Blame/Patch/Hover/Highlight),
+ * 实现当前 HEAD 精确高亮、多文件、Hunk 导航、命令真实 handler。
  */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const logger = new LogService();
   context.subscriptions.push(logger);
 
-  // 配置日志级别并跟随变更
   const applyLogLevel = () => {
     const level = vscode.workspace
       .getConfiguration()
@@ -35,21 +41,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
   );
 
-  // context key 初始状态
   await vscode.commands.executeCommand('setContext', ContextKeys.enabled, true);
   await vscode.commands.executeCommand('setContext', ContextKeys.hasActivePatches, false);
   await vscode.commands.executeCommand('setContext', ContextKeys.exactWorkspace, false);
 
-  // 树视图
-  const treeProvider = new PatchFilesTreeProvider();
-  context.subscriptions.push(
-    vscode.window.registerTreeDataProvider(VIEW_ID, treeProvider),
-  );
-
-  // 命令
-  registerCommands(context, logger);
-
-  // GitRunner 初始化(依据配置)+ 后台版本检测
+  // Git 配置 + GitRunner
   const gitSection = vscode.workspace.getConfiguration('pentimento.git');
   const git = new GitRunner(
     {
@@ -64,26 +60,70 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (isSupported(info.version)) {
         logger.info(`git detected: ${formatVersion(info.version)}`);
       } else {
-        logger.warn(
-          `git version ${formatVersion(info.version)} is below supported minimum 2.20`,
-        );
+        logger.warn(`git version ${formatVersion(info.version)} is below supported minimum 2.20`);
       }
     } else {
       logger.warn('git not available or version undetectable');
     }
   });
 
-  // 阶段 3:Repository / Blame / Hover
+  // 服务
   const repoResolver = new RepositoryResolver(git);
+  const revisionResolver = new RevisionResolver(git);
+  const commitProvider = new CommitProvider(git);
   const blameProvider = new BlameProvider(git);
+  const patchService = new PatchService(git);
+  const sessionManager = new HighlightSessionManager();
+  const decorationManager = new DecorationManager(
+    decorationConfigFromSettings(vscode.workspace.getConfiguration('pentimento')),
+  );
+  context.subscriptions.push(decorationManager);
+
+  // 树视图
+  const treeProvider = new PatchFilesTreeProvider();
+  context.subscriptions.push(vscode.window.registerTreeDataProvider(VIEW_ID, treeProvider));
+
+  // 高亮控制器 + 编辑器跟踪
+  const controller = new HighlightController(
+    git,
+    repoResolver,
+    revisionResolver,
+    commitProvider,
+    blameProvider,
+    patchService,
+    sessionManager,
+    decorationManager,
+    treeProvider,
+    logger,
+  );
+  context.subscriptions.push(controller);
+  const editorTracker = new EditorTracker(controller);
+  context.subscriptions.push(editorTracker);
+
+  // Hover
   const hoverProvider = new GitCommitHoverProvider(repoResolver, blameProvider);
   context.subscriptions.push(
     vscode.languages.registerHoverProvider({ scheme: 'file' }, hoverProvider),
   );
+
+  // 命令
+  registerCommands(context, logger, controller);
+
+  // 配置变化:刷新 hover 配置 + 重建 Decoration 样式
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('pentimento.hover') || e.affectsConfiguration('pentimento.blame')) {
+      if (e.affectsConfiguration('pentimento.hover')) {
         hoverProvider.refreshConfig();
+      }
+      if (e.affectsConfiguration('pentimento.blame')) {
+        hoverProvider.refreshConfig();
+        controller.refreshBlameOpts();
+      }
+      if (e.affectsConfiguration('pentimento.highlight')) {
+        decorationManager.setConfig(
+          decorationConfigFromSettings(vscode.workspace.getConfiguration('pentimento')),
+        );
+        void controller.applyVisibleEditors();
       }
     }),
   );
@@ -93,7 +133,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
   );
 
-  logger.info('Pentimento activated (stage 3: hover ready)');
+  logger.info('Pentimento activated (stage 6: HEAD exact highlight ready)');
 }
 
 export function deactivate(): void {

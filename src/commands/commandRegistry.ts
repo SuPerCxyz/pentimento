@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { Commands } from '../constants';
 import type { LogService } from '../utils/logging';
+import type { HighlightController } from '../highlight/highlightController';
 
 /** 命令定义:[commandId, 用户可读标题]。标题与 package.json contributes.commands 一致。 */
 type CommandDef = [string, string];
@@ -38,28 +39,54 @@ const COMMAND_DEFS: readonly CommandDef[] = [
   [Commands.showDiagnostics, 'Show Diagnostics'],
 ];
 
+/** 真实 handler:接收 controller 与命令参数。 */
+type Handler = (c: HighlightController, ...args: unknown[]) => Promise<void> | void;
+
+const REAL_HANDLERS: Record<string, Handler> = {
+  [Commands.addCommitFromLine]: (c, ...args) => c.addCommitFromHash(String(args[0] ?? ''), false),
+  [Commands.highlightOnlyCommitFromLine]: (c, ...args) => c.addCommitFromHash(String(args[0] ?? ''), true),
+  [Commands.toggleCommitFromLine]: (c, ...args) => c.addCommitFromHash(String(args[0] ?? ''), false),
+  [Commands.addRef]: (c) => c.addRef(),
+  [Commands.highlightWorkingTree]: (c) => c.addWorkingTree(),
+  [Commands.highlightStaged]: (c) => c.addStaged(),
+  [Commands.clearAll]: (c) => c.clearAll(),
+  [Commands.toggle]: (c) => c.toggleHighlight(),
+  [Commands.refresh]: (c) => c.refresh(),
+  [Commands.removePatch]: (c) => c.removeActivePatch(),
+  [Commands.showOnlyPrimary]: (c) => c.showOnlyPrimary(),
+  [Commands.showAll]: (c) => c.showAll(),
+  [Commands.hideAll]: (c) => c.hideAll(),
+  [Commands.nextHunk]: (c) => c.nextHunk(),
+  [Commands.previousHunk]: (c) => c.previousHunk(),
+};
+
 /**
  * 注册全部 pentimento.* 命令。
- *
- * 阶段 1:除 `openOutputLog` 外,其余命令为占位实现,
- * 提示用户该功能将在后续阶段提供。后续阶段逐个替换为真实 handler。
+ * 已实现的命令接入 controller;其余为占位。
  */
-export function registerCommands(context: vscode.ExtensionContext, logger: LogService): void {
-  // 真实实现:打开输出日志
+export function registerCommands(
+  context: vscode.ExtensionContext,
+  logger: LogService,
+  controller: HighlightController,
+): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(Commands.openOutputLog, () => {
       logger.show();
     }),
   );
 
-  // 占位实现
   for (const [id, title] of COMMAND_DEFS) {
+    const handler = REAL_HANDLERS[id];
     context.subscriptions.push(
       vscode.commands.registerCommand(id, async (...args: unknown[]) => {
-        logger.debug(`command stub invoked: ${id}`, { argCount: args.length });
-        await vscode.window.showInformationMessage(
-          `Pentimento: "${title}" will be available in a later development stage.`,
-        );
+        if (handler) {
+          await handler(controller, ...args);
+        } else {
+          logger.debug(`command stub invoked: ${id}`, { argCount: args.length });
+          await vscode.window.showInformationMessage(
+            `Pentimento: "${title}" 将在后续阶段实现。`,
+          );
+        }
       }),
     );
   }
