@@ -68,6 +68,18 @@ const REAL_HANDLERS: Record<string, Handler> = {
   [Commands.cleanStaleWorktrees]: (c) => c.cleanStaleWorktrees(),
   [Commands.setPatchColor]: (c, ...args) => c.setPatchColor(args[0] ? String(args[0]) : undefined),
   [Commands.fetch]: (c) => c.fetchAndRefresh(),
+  [Commands.setPrimaryPatch]: (c, ...args) => c.setPrimaryPatchCommand(args[0] ? String(args[0]) : undefined),
+  [Commands.togglePatchVisibility]: (c, ...args) =>
+    c.togglePatchVisibilityCommand(args[0] ? String(args[0]) : undefined),
+  [Commands.switchHistoricalViewMode]: (c, ...args) =>
+    c.switchHistoricalViewModeCommand(args[0] ? String(args[0]) : undefined),
+  [Commands.highlightCurrentFile]: (c) => c.highlightCurrentFile(),
+  [Commands.highlightAllFiles]: (c) => c.highlightAllFiles(),
+  [Commands.highlightSurvivingLines]: (c) => c.highlightSurvivingLines(),
+  [Commands.showFiles]: (c) => c.showFiles(),
+  [Commands.managePatches]: (c) => c.managePatches(),
+  [Commands.showDiagnostics]: (c) => c.showDiagnostics(),
+  [Commands.closeExactWorkspace]: (c) => c.closeExactWorkspace(),
 };
 
 /**

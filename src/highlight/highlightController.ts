@@ -16,6 +16,7 @@ import type { PatchLineMembership } from './lineMembershipIndex';
 import { WorktreeManager, type ExactPatchWorkspace, worktreePathFor } from '../git/worktreeManager';
 import type { WorktreeMetadataStore } from '../worktree/worktreeMetadataStore';
 import { SessionMetadataStore, type PersistedPatch } from './sessionMetadataStore';
+import type { PatchHighlightLayer } from './patchHighlightLayer';
 import type { FetchService } from '../git/fetchService';
 import { openExactWorkspace } from '../ui/exactWorkspaceLauncher';
 import { parseParents } from '../git/commitProvider';
@@ -32,8 +33,10 @@ import {
   hideAll as hideAllLayers,
   setLayerColor,
   setLayerEnabled,
+  setPrimary,
+  type RepositoryHighlightSession,
 } from './repositoryHighlightSession';
-import { ContextKeys, ConfigKeys, DEFAULT_MAX_ACTIVE_PATCHES, PATCH_COLOR_PRESETS, isValidHexColor } from '../constants';
+import { ContextKeys, ConfigKeys, DEFAULT_MAX_ACTIVE_PATCHES, PATCH_COLOR_PRESETS, isValidHexColor, VIEW_ID } from '../constants';
 import type { LogService } from '../utils/logging';
 import type { PatchFilesTreeProvider } from '../tree/patchFilesTreeProvider';
 import { GitError, toUserMessage } from '../git/gitErrors';
@@ -375,6 +378,291 @@ export class HighlightController implements vscode.Disposable {
       case 'projected-footprint':
         return '投影';
     }
+  }
+
+  /** QuickPick 选择当前会话中的 Patch。 */
+  private async pickPatch(
+    session: RepositoryHighlightSession,
+    placeHolder: string,
+  ): Promise<PatchHighlightLayer | undefined> {
+    const items = [...session.patchLayers.values()].map((l) => ({
+      label: `${l.patch.selection.commitHash?.slice(0, 8) ?? '?'} ${l.label}`,
+      description: this.viewModeLabelOf(l.viewMode),
+      layer: l,
+    }));
+    const picked = await vscode.window.showQuickPick(items, { placeHolder });
+    return picked?.layer;
+  }
+
+  /** 设某个 Patch 为主要 Patch。 */
+  async setPrimaryPatchCommand(patchId?: string): Promise<void> {
+    const session = this.currentSession();
+    if (!session || session.patchLayers.size === 0) {
+      await vscode.window.showInformationMessage('Pentimento: 当前没有活跃 Patch。');
+      return;
+    }
+    const layer = patchId
+      ? session.patchLayers.get(patchId)
+      : await this.pickPatch(session, 'Pentimento: 选择要设为主要 Patch');
+    if (!layer) {
+      return;
+    }
+    setPrimary(session, layer.patchId);
+    await this.applyVisibleEditors();
+    this.updateChrome();
+  }
+
+  /** 切换单个 Patch 的显隐。 */
+  async togglePatchVisibilityCommand(patchId?: string): Promise<void> {
+    const session = this.currentSession();
+    if (!session || session.patchLayers.size === 0) {
+      await vscode.window.showInformationMessage('Pentimento: 当前没有活跃 Patch。');
+      return;
+    }
+    const layer = patchId
+      ? session.patchLayers.get(patchId)
+      : await this.pickPatch(session, 'Pentimento: 选择要切换显隐的 Patch');
+    if (!layer) {
+      return;
+    }
+    setLayerEnabled(session, layer.patchId, !layer.enabled);
+    await this.applyVisibleEditors();
+    this.updateChrome();
+  }
+
+  /** 切换历史查看模式(surviving / projected;exact 请用「打开精确 Patch 版本」)。 */
+  async switchHistoricalViewModeCommand(patchId?: string): Promise<void> {
+    const session = this.currentSession();
+    if (!session || session.patchLayers.size === 0) {
+      await vscode.window.showInformationMessage('Pentimento: 当前没有活跃 Patch。');
+      return;
+    }
+    const layer = patchId
+      ? session.patchLayers.get(patchId)
+      : await this.pickPatch(session, 'Pentimento: 选择要切换模式的 Patch');
+    if (!layer) {
+      return;
+    }
+    const sel = layer.patch.selection;
+    if ((sel.type !== 'commit' && sel.type !== 'range') || !sel.patchRevision) {
+      await vscode.window.showInformationMessage('Pentimento: 仅 Commit/Range 支持模式切换。');
+      return;
+    }
+    const modes = [
+      { label: '存活行(surviving)', value: 'surviving-lines' as const },
+      { label: '投影到当前版本(projected)', value: 'projected-footprint' as const },
+      { label: '精确 Patch 版本(exact,需 Patch==HEAD)', value: 'exact-patch-revision' as const },
+    ];
+    const pick = await vscode.window.showQuickPick(modes, {
+      placeHolder: 'Pentimento: 选择查看模式',
+    });
+    if (!pick) {
+      return;
+    }
+    const repo = await this.repoResolver.resolveRepository(session.repositoryRoot);
+    if (!repo) {
+      return;
+    }
+    if (pick.value === 'exact-patch-revision') {
+      if (sel.patchRevision !== session.displayRevision) {
+        await vscode.window.showInformationMessage(
+          'Pentimento: exact 模式要求 Patch 版本 == 当前 HEAD,请使用「打开精确 Patch 版本」。',
+        );
+        return;
+      }
+      removePatch(session, layer.patchId);
+      this.membership.removePatch(layer.patchId);
+      await this.buildAndAddPatch(repo, { ...sel, viewMode: 'exact-patch-revision' }, false);
+      return;
+    }
+    const head = (
+      await this.git.runText(['rev-parse', 'HEAD'], { repositoryRoot: repo.root })
+    ).trim();
+    removePatch(session, layer.patchId);
+    this.membership.removePatch(layer.patchId);
+    await this.buildAndAddPatch(
+      repo,
+      { ...sel, viewMode: pick.value, displayRevision: head },
+      false,
+    );
+  }
+
+  /** 仅高亮当前文件(清空其他可见编辑器的高亮)。 */
+  async highlightCurrentFile(): Promise<void> {
+    const active = vscode.window.activeTextEditor;
+    if (!active) {
+      await vscode.window.showWarningMessage('Pentimento: 请先打开一个文件。');
+      return;
+    }
+    for (const e of vscode.window.visibleTextEditors) {
+      if (e !== active) {
+        this.decorationManager.clearEditor(e);
+      }
+    }
+    await this.applyToEditor(active);
+    this.updateChrome();
+  }
+
+  /** 高亮全部变更文件(对全部可见编辑器应用)。 */
+  async highlightAllFiles(): Promise<void> {
+    await this.applyVisibleEditors();
+    this.updateChrome();
+  }
+
+  /** 对当前行所属提交以存活行模式高亮(祖先 commit 自动用 surviving)。 */
+  async highlightSurvivingLines(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      await vscode.window.showWarningMessage('Pentimento: 请先打开一个文件。');
+      return;
+    }
+    const repo = await this.repoResolver.resolveRepository(editor.document.uri.fsPath);
+    if (!repo) {
+      return;
+    }
+    if (editor.document.isDirty) {
+      await vscode.window.showWarningMessage('Pentimento: 请先保存当前文件以计算 blame。');
+      return;
+    }
+    const lineIdx = editor.selection.active.line;
+    let blame: BlameLine[];
+    try {
+      const head = (
+        await this.git.runText(['rev-parse', 'HEAD'], { repositoryRoot: repo.root })
+      ).trim();
+      blame = await this.getCachedBlame(repo.root, head, editor.document);
+    } catch {
+      await vscode.window.showWarningMessage('Pentimento: 无法获取当前行 blame。');
+      return;
+    }
+    const bl = blame[lineIdx];
+    if (!bl) {
+      await vscode.window.showInformationMessage('Pentimento: 无法获取当前行提交。');
+      return;
+    }
+    await this.addCommitFromHash(bl.commitHash, false);
+  }
+
+  /** 聚焦变更文件树视图。 */
+  async showFiles(): Promise<void> {
+    await vscode.commands.executeCommand(`${VIEW_ID}.focus`);
+  }
+
+  /** 管理面板:选择 Patch 后执行操作。 */
+  async managePatches(): Promise<void> {
+    const session = this.currentSession();
+    if (!session || session.patchLayers.size === 0) {
+      await vscode.window.showInformationMessage('Pentimento: 当前没有活跃 Patch。');
+      await vscode.commands.executeCommand(`${VIEW_ID}.focus`);
+      return;
+    }
+    const layer = await this.pickPatch(session, 'Pentimento: 选择要管理的 Patch');
+    if (!layer) {
+      return;
+    }
+    const actions = [
+      { label: '设为主要 Patch', value: 'primary' },
+      { label: layer.enabled ? '隐藏该 Patch' : '显示该 Patch', value: 'toggle' },
+      { label: '设置颜色', value: 'color' },
+      { label: '移除该 Patch', value: 'remove' },
+      { label: '取消', value: '' },
+    ];
+    const pick = await vscode.window.showQuickPick(actions, {
+      placeHolder: `Pentimento:${layer.label}`,
+    });
+    if (!pick || pick.value === '') {
+      return;
+    }
+    switch (pick.value) {
+      case 'primary':
+        await this.setPrimaryPatchCommand(layer.patchId);
+        break;
+      case 'toggle':
+        await this.togglePatchVisibilityCommand(layer.patchId);
+        break;
+      case 'color':
+        await this.setPatchColor(layer.patchId);
+        break;
+      case 'remove':
+        setPrimary(session, layer.patchId);
+        removePatch(session, layer.patchId);
+        this.membership.removePatch(layer.patchId);
+        await this.applyVisibleEditors();
+        this.updateChrome();
+        break;
+    }
+  }
+
+  /** 显示诊断信息:会话/缓存/仓库状态。 */
+  async showDiagnostics(): Promise<void> {
+    const sessions = this.sessionManager.allSessions();
+    let patchCount = 0;
+    let enabledCount = 0;
+    for (const s of sessions) {
+      for (const l of s.patchLayers.values()) {
+        patchCount++;
+        if (l.enabled) {
+          enabledCount++;
+        }
+      }
+    }
+    const lines: string[] = [
+      `会话数:${sessions.length}`,
+      `Patch 总数:${patchCount}(启用 ${enabledCount})`,
+      `blame 缓存:${this.blameCache.size}`,
+      `target commits 缓存:${this.targetCommitsCache.size}`,
+      `patch diff 缓存:${this.patchDisplayDiffCache.size}`,
+      `path evolution 缓存:${this.pathEvolutionCache.size}`,
+    ];
+    const editor = vscode.window.activeTextEditor;
+    if (editor) {
+      const repo = await this.repoResolver.resolveRepository(editor.document.uri.fsPath);
+      if (repo) {
+        try {
+          const head = (
+            await this.git.runText(['rev-parse', 'HEAD'], { repositoryRoot: repo.root })
+          ).trim();
+          lines.push(`当前仓库:${repo.root}`);
+          lines.push(`HEAD:${head.slice(0, 12)}`);
+        } catch {
+          lines.push(`当前仓库:${repo.root}(HEAD 读取失败)`);
+        }
+      }
+    }
+    const items = lines.map((l) => ({ label: l }));
+    await vscode.window.showQuickPick(items, {
+      placeHolder: 'Pentimento: 诊断信息(按 Esc 关闭)',
+      canPickMany: false,
+    });
+  }
+
+  /** 关闭精确 Patch 工作区窗口并清理 worktree。 */
+  async closeExactWorkspace(): Promise<void> {
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders || folders.length === 0) {
+      await vscode.window.showInformationMessage('Pentimento: 当前无打开的工作区。');
+      return;
+    }
+    const wsPath = folders[0].uri.fsPath;
+    const ws = await this.metadataStore.findByPath(wsPath);
+    if (!ws) {
+      await vscode.window.showInformationMessage('Pentimento: 当前窗口不是精确 Patch 工作区。');
+      return;
+    }
+    try {
+      const repo: Repository = {
+        root: ws.repositoryRoot,
+        repositoryId: ws.repositoryId,
+        bare: false,
+      };
+      await this.worktreeManager.remove(repo, ws);
+      await this.metadataStore.remove(ws.worktreePath);
+    } catch (e) {
+      await this.reportError(e, '关闭精确工作区失败');
+      return;
+    }
+    await vscode.commands.executeCommand('setContext', ContextKeys.exactWorkspace, false);
+    await vscode.commands.executeCommand('workbench.action.closeWindow');
   }
 
   async showOnlyPrimary(): Promise<void> {
