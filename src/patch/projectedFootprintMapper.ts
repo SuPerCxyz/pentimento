@@ -55,21 +55,30 @@ export function buildLineMapFromDiff(diff: string): LineMapResult {
   let oldLine = 1;
   let newLine = 1;
   let inHunk = false;
-  let curHunkHasAdded = false;
-  let curHunkNewStart = 0;
-  const pendingDeleted: number[] = [];
+  const pendingDeleted: { oldLine: number; text: string }[] = [];
+  const addedLines: { newLine: number; text: string }[] = [];
 
   const flushHunk = () => {
     for (const dl of pendingDeleted) {
-      if (curHunkHasAdded) {
-        // hunk 同时含 + 与 -:视为 modified(行被后续修改),位置近似取 hunk newStart
-        map.set(dl, { status: 'modified', displayLine: curHunkNewStart });
+      if (addedLines.length > 0) {
+        // hunk 同时含 + 与 -:视为 modified。
+        // 用内容相似度精确定位到最相似的 added 行(而非 hunk newStart 近似)。
+        let best = addedLines[0];
+        let bestSim = lineSimilarity(dl.text, best.text);
+        for (let i = 1; i < addedLines.length; i++) {
+          const s = lineSimilarity(dl.text, addedLines[i].text);
+          if (s > bestSim) {
+            bestSim = s;
+            best = addedLines[i];
+          }
+        }
+        map.set(dl.oldLine, { status: 'modified', displayLine: best.newLine });
       } else {
-        map.set(dl, { status: 'deleted' });
+        map.set(dl.oldLine, { status: 'deleted' });
       }
     }
     pendingDeleted.length = 0;
-    curHunkHasAdded = false;
+    addedLines.length = 0;
   };
 
   for (const line of lines) {
@@ -86,18 +95,16 @@ export function buildLineMapFromDiff(diff: string): LineMapResult {
       oldLine = oldStart;
       newLine = newStart;
       inHunk = true;
-      curHunkHasAdded = false;
-      curHunkNewStart = newStart;
       continue;
     }
     if (!inHunk || isMetaLine(line)) {
       continue;
     }
     if (line.startsWith('+')) {
-      curHunkHasAdded = true;
+      addedLines.push({ newLine, text: line.slice(1) });
       newLine++;
     } else if (line.startsWith('-')) {
-      pendingDeleted.push(oldLine);
+      pendingDeleted.push({ oldLine, text: line.slice(1) });
       oldLine++;
     } else if (line.startsWith(' ')) {
       map.set(oldLine, { displayLine: newLine, status: 'unchanged' });
@@ -107,6 +114,23 @@ export function buildLineMapFromDiff(diff: string): LineMapResult {
   }
   flushHunk();
   return { map, offset: newLine - oldLine };
+}
+
+/** 行文本相似度(Jaccard,去空白字符集合)。1=相同,0=无公共字符。 */
+export function lineSimilarity(a: string, b: string): number {
+  const sa = new Set(a.replace(/\s/g, ''));
+  const sb = new Set(b.replace(/\s/g, ''));
+  if (sa.size === 0 && sb.size === 0) {
+    return 1;
+  }
+  let common = 0;
+  for (const c of sa) {
+    if (sb.has(c)) {
+      common++;
+    }
+  }
+  const union = sa.size + sb.size - common;
+  return union === 0 ? 0 : common / union;
 }
 
 function confidenceFor(status: ProjectedLineStatus): MappingConfidence {

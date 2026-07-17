@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { buildLineMapFromDiff, projectRanges } from '../../src/patch/projectedFootprintMapper';
+import { buildLineMapFromDiff, projectRanges, lineSimilarity } from '../../src/patch/projectedFootprintMapper';
 import type { AddedLineRange } from '../../src/patch/models';
 
 function file(p: string, ...hunks: string[]): string {
@@ -78,5 +78,24 @@ describe('projectedFootprintMapper', () => {
     const diff = file('a.py', '@@ -1,1 +1,1 @@', ' ctx');
     const { map } = buildLineMapFromDiff(diff);
     expect(map.get(1)?.status).to.equal('unchanged');
+  });
+
+  it('modified line maps to most similar added line', () => {
+    const diff = [
+      '@@ -1,2 +1,2 @@',
+      '-old content here',
+      '+new content here',
+      ' context',
+    ].join('\n');
+    const { map } = buildLineMapFromDiff(diff);
+    expect(map.get(1)?.status).to.equal('modified');
+    expect(map.get(1)?.displayLine).to.equal(1);
+  });
+
+  it('lineSimilarity returns 1 for identical and 0 for disjoint', () => {
+    expect(lineSimilarity('abc', 'abc')).to.equal(1);
+    expect(lineSimilarity('abc', 'xyz')).to.equal(0);
+    expect(lineSimilarity('hello', 'hola')).to.be.greaterThan(0);
+    expect(lineSimilarity('', '')).to.equal(1);
   });
 });
