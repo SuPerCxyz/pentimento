@@ -52,7 +52,7 @@ export function buildHoverContent(data: HoverCommitData): string {
   out.push('');
 
   if (data.isUncommitted) {
-    out.push('Uncommitted Changes');
+    out.push('未提交修改');
     out.push('');
     out.push(formatCommandLink({ command: Commands.highlightWorkingTree, args: [], label: '添加工作区修改到高亮' }) + '  ');
     out.push(formatCommandLink({ command: Commands.highlightStaged, args: [], label: '添加暂存区修改到高亮' }) + '  ');

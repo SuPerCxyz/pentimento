@@ -67,7 +67,7 @@ describe('hoverCommandBuilder', () => {
       alreadyHighlighted: false,
       mode: 'compact',
     });
-    expect(content).to.contain('Uncommitted Changes');
+    expect(content).to.contain('未提交修改');
     expect(content).to.contain(`command:${Commands.highlightWorkingTree}`);
     expect(content).to.contain(`command:${Commands.highlightStaged}`);
   });

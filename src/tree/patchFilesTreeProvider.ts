@@ -16,7 +16,7 @@ class PatchNode extends vscode.TreeItem {
     const marker = !layer.enabled ? '○' : isPrimary ? '★' : '●';
     const hash = layer.patch.selection.commitHash?.slice(0, 8) ?? '';
     super(`${marker} ${hash} ${layer.label}`.trim(), vscode.TreeItemCollapsibleState.Expanded);
-    this.description = `${viewModeLabel(layer.viewMode)} · ${layer.patch.totalAddedLines} lines`;
+    this.description = `${viewModeLabel(layer.viewMode)} · ${layer.patch.totalAddedLines} 行`;
     this.tooltip = `${hash} · ${layer.label}\n${viewModeLabel(layer.viewMode)} · ${layer.patch.files.length} files · +${layer.patch.totalAddedLines}`;
     this.contextValue = isPrimary ? 'pentimento.primaryPatch' : 'pentimento.patch';
   }
@@ -40,7 +40,7 @@ class FileNode extends vscode.TreeItem {
 
 class HunkNode extends vscode.TreeItem {
   constructor(index: number, range: AddedLineRange) {
-    super(`Hunk ${index} · Lines ${range.startLine}-${range.endLine}`, vscode.TreeItemCollapsibleState.None);
+    super(`Hunk ${index} · 行 ${range.startLine}-${range.endLine}`, vscode.TreeItemCollapsibleState.None);
     this.tooltip = `Added lines ${range.startLine}-${range.endLine} (${range.endLine - range.startLine + 1} lines)`;
   }
 }
@@ -86,11 +86,11 @@ export class PatchFilesTreeProvider implements vscode.TreeDataProvider<PatchTree
 function viewModeLabel(mode: HistoricalPatchViewMode): string {
   switch (mode) {
     case 'exact-patch-revision':
-      return 'Exact';
+      return '精确';
     case 'surviving-lines':
-      return 'Surviving';
+      return '存活';
     case 'projected-footprint':
-      return 'Projected';
+      return '投影';
   }
 }
 

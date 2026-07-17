@@ -757,7 +757,20 @@ export class HighlightController implements vscode.Disposable {
       return parents[0];
     }
     // merge commit:选择父提交
-    const items = parents.map((p, i) => ({ label: `Parent ${i + 1}: ${p.slice(0, 8)}`, value: p }));
+    const items: { label: string; value: string }[] = parents.map((p, i) => ({
+      label: `父提交 ${i + 1}:${p.slice(0, 8)}`,
+      value: p,
+    }));
+    try {
+      const mb = (
+        await this.git.runText(['merge-base', parents[0], parents[1]], { repositoryRoot: repo.root })
+      ).trim();
+      if (mb) {
+        items.push({ label: `Merge Base:${mb.slice(0, 8)}`, value: mb });
+      }
+    } catch {
+      // 无 merge-base(理论上不发生)
+    }
     items.push({ label: '取消', value: '' });
     const choice = await vscode.window.showQuickPick(items, {
       placeHolder: 'Pentimento: 该提交为 Merge commit,请选择 Patch 比较基准',
@@ -855,7 +868,7 @@ export class HighlightController implements vscode.Disposable {
       !!sessions.find((s) => s.primaryPatchId),
     );
     if (hasActive) {
-      this.statusItem.text = `Pentimento: ${totalPatches} patch${totalPatches > 1 ? 'es' : ''} · ${totalFiles} files · ${totalLines} lines`;
+      this.statusItem.text = `Pentimento:${totalPatches} 个 Patch · ${totalFiles} 个文件 · ${totalLines} 行`;
       this.statusItem.show();
     } else {
       this.statusItem.hide();
