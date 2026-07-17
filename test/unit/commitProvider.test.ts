@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import type { IGitRunner, GitRunResult } from '../../src/git/gitRunner';
-import { CommitProvider, parseCommitShow, COMMIT_FORMAT } from '../../src/git/commitProvider';
+import { CommitProvider, parseCommitShow, COMMIT_FORMAT, parseCommitList } from '../../src/git/commitProvider';
 import { GitError } from '../../src/git/gitErrors';
 
 function fakeGit(map: Record<string, string | Error>): IGitRunner {
@@ -67,5 +67,23 @@ describe('CommitProvider', () => {
     } catch (e) {
       expect((e as GitError).code).to.equal('invalid-revision');
     }
+  });
+});
+
+describe('parseCommitList', () => {
+  it('parses multiple commits and skips blanks', () => {
+    const c1 = ['a'.repeat(40), 'aaaaaaa', 'Alice', 'a@b.c', '1730000000', 'Alice', '1730000000', 'fix bug'].join('\0');
+    const c2 = ['b'.repeat(40), 'bbbbbbb', 'Bob', 'b@b.c', '1730000001', 'Bob', '1730000001', 'add feature'].join('\0');
+    const list = parseCommitList(`${c1}\n${c2}\n\n`);
+    expect(list).to.have.lengthOf(2);
+    expect(list[0].shortHash).to.equal('aaaaaaa');
+    expect(list[0].summary).to.equal('fix bug');
+    expect(list[0].authorTimestamp).to.equal(1730000000);
+    expect(list[1].authorName).to.equal('Bob');
+  });
+
+  it('returns empty for blank output', () => {
+    expect(parseCommitList('')).to.have.lengthOf(0);
+    expect(parseCommitList('\n\n')).to.have.lengthOf(0);
   });
 });

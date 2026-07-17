@@ -11,6 +11,7 @@ export const OUTPUT_CHANNEL_NAME = 'Pentimento';
 /** VSCode 视图容器与视图 ID。 */
 export const VIEW_CONTAINER_ID = 'pentimento';
 export const VIEW_ID = 'pentimento.patches';
+export const VIEW_COMMITS_ID = 'pentimento.commits';
 
 /** 最低支持的 Git 版本(主.次.补丁)。 */
 export const MIN_GIT_VERSION: readonly [number, number, number] = [2, 20, 0];
@@ -55,6 +56,7 @@ export const Commands = {
   hideAll: 'pentimento.hideAll',
   toggle: 'pentimento.toggle',
   refresh: 'pentimento.refresh',
+  refreshCommits: 'pentimento.refreshCommits',
   fetch: 'pentimento.fetch',
   clearAll: 'pentimento.clearAll',
   switchHistoricalViewMode: 'pentimento.switchHistoricalViewMode',

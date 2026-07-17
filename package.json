@@ -64,7 +64,8 @@
       { "command": "pentimento.openOutputLog", "title": "Pentimento: 打开输出日志" },
       { "command": "pentimento.showDiagnostics", "title": "Pentimento: 显示诊断" },
       { "command": "pentimento.setPatchColor", "title": "Pentimento: 设置 Patch 颜色" },
-      { "command": "pentimento.fetch", "title": "Pentimento: Fetch 并刷新" }
+      { "command": "pentimento.fetch", "title": "Pentimento: Fetch 并刷新" },
+      { "command": "pentimento.refreshCommits", "title": "Pentimento: 刷新提交列表" }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -80,6 +81,10 @@
         {
           "id": "pentimento.patches",
           "name": "补丁图层"
+        },
+        {
+          "id": "pentimento.commits",
+          "name": "提交列表"
         }
       ]
     },
@@ -88,6 +93,10 @@
         "view": "pentimento.patches",
         "contents": "尚未高亮任何 Git Patch。\n开始:在代码行悬停后点击「添加此提交到高亮」,或使用下方命令。\n[添加提交或范围](command:pentimento.addRef)\n[高亮工作区修改](command:pentimento.highlightWorkingTree)\n[高亮暂存区修改](command:pentimento.highlightStaged)\n[Fetch 并刷新](command:pentimento.fetch)",
         "when": "!pentimento.hasActivePatches"
+      },
+      {
+        "view": "pentimento.commits",
+        "contents": "尚未加载提交列表。\n打开一个 Git 仓库文件后,点击右上角刷新按钮,或:\n[刷新提交列表](command:pentimento.refreshCommits)\n\n点击列表中的提交即高亮其新增代码。"
       }
     ],
     "menus": {
@@ -124,7 +133,8 @@
         { "command": "pentimento.openOutputLog", "when": "true" },
         { "command": "pentimento.showDiagnostics", "when": "true" },
         { "command": "pentimento.setPatchColor", "when": "pentimento.hasActivePatches" },
-        { "command": "pentimento.fetch", "when": "pentimento.enabled" }
+        { "command": "pentimento.fetch", "when": "pentimento.enabled" },
+        { "command": "pentimento.refreshCommits", "when": "pentimento.enabled" }
       ],
       "view/title": [
         {
@@ -141,6 +151,18 @@
           "command": "pentimento.clearAll",
           "when": "view == pentimento.patches && pentimento.hasActivePatches",
           "group": "navigation@3"
+        },
+        {
+          "command": "pentimento.refreshCommits",
+          "when": "view == pentimento.commits",
+          "group": "navigation@1"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "pentimento.highlightSurvivingLines",
+          "when": "editorTextFocus && pentimento.enabled",
+          "group": "pentimento@1"
         }
       ]
     },

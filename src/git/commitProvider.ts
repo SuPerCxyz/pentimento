@@ -38,6 +38,21 @@ export function parseCommitShow(output: string): GitCommitInfo | undefined {
   };
 }
 
+/** 解析 `git log --format=COMMIT_FORMAT` 输出为提交列表。纯函数。 */
+export function parseCommitList(output: string): GitCommitInfo[] {
+  const result: GitCommitInfo[] = [];
+  for (const line of (output ?? '').split('\n')) {
+    if (!line.trim()) {
+      continue;
+    }
+    const info = parseCommitShow(line);
+    if (info && info.commitHash) {
+      result.push(info);
+    }
+  }
+  return result;
+}
+
 /** 解析 `git rev-list --parents -n 1 <commit>` 输出,返回 commit 与其父提交列表。纯函数。 */
 export function parseParents(revListParentsOutput: string): { commit: string; parents: string[] } | undefined {
   const line = (revListParentsOutput ?? '').trim().split('\n')[0]?.trim() ?? '';
@@ -68,5 +83,14 @@ export class CommitProvider {
       throw new GitError('invalid-revision', toUserMessage('invalid-revision'));
     }
     return info;
+  }
+
+  /** 列出仓库提交(默认 HEAD 历史,最多 limit 条)。 */
+  async listCommits(repositoryRoot: string, limit = 200): Promise<GitCommitInfo[]> {
+    const out = await this.git.runText(
+      ['log', `--format=${COMMIT_FORMAT}`, '-n', String(limit), 'HEAD'],
+      { repositoryRoot },
+    );
+    return parseCommitList(out);
   }
 }

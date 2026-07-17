@@ -115,4 +115,9 @@ suite('Pentimento commands (real git repo)', () => {
     await vscode.commands.executeCommand('pentimento.highlightSurvivingLines');
     await vscode.commands.executeCommand('pentimento.clearAll');
   });
+
+  test('commit list refresh does not throw', async () => {
+    await openFile('a.txt');
+    await vscode.commands.executeCommand('pentimento.refreshCommits');
+  });
 });

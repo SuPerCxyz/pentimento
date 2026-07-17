@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
-import { ConfigKeys, ContextKeys, VIEW_ID } from './constants';
+import { ConfigKeys, ContextKeys, VIEW_ID, VIEW_COMMITS_ID, Commands } from './constants';
 import { LogService, type LogLevel } from './utils/logging';
 import { registerCommands } from './commands/commandRegistry';
 import { PatchFilesTreeProvider } from './tree/patchFilesTreeProvider';
+import { CommitListTreeProvider } from './tree/commitListTreeProvider';
 import { GitRunner } from './git/gitRunner';
 import { detectGitVersion, formatVersion, isSupported } from './git/gitVersion';
 import { RepositoryResolver } from './git/repositoryResolver';
@@ -93,6 +94,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // 树视图
   const treeProvider = new PatchFilesTreeProvider(sessionManager);
   context.subscriptions.push(vscode.window.registerTreeDataProvider(VIEW_ID, treeProvider));
+
+  const commitListProvider = new CommitListTreeProvider(commitProvider, repoResolver);
+  context.subscriptions.push(vscode.window.registerTreeDataProvider(VIEW_COMMITS_ID, commitListProvider));
+  context.subscriptions.push(
+    vscode.commands.registerCommand(Commands.refreshCommits, () => commitListProvider.refresh()),
+  );
 
   // 高亮控制器 + 编辑器跟踪
   const controller = new HighlightController(
