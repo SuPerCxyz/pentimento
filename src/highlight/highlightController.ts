@@ -10,6 +10,10 @@ import type { BlameLine } from '../git/blameParser';
 import { PatchService } from '../patch/patchService';
 import type { PatchSelection } from '../patch/models';
 import { findSurvivingRanges } from '../patch/survivingLineMapper';
+import { WorktreeManager, type ExactPatchWorkspace, worktreePathFor } from '../git/worktreeManager';
+import type { WorktreeMetadataStore } from '../worktree/worktreeMetadataStore';
+import { openExactWorkspace } from '../ui/exactWorkspaceLauncher';
+import { parseParents } from '../git/commitProvider';
 import { HighlightSessionManager } from './highlightSessionManager';
 import { LineMembershipIndex } from './lineMembershipIndex';
 import { DecorationManager } from './decorationManager';
@@ -57,6 +61,9 @@ export class HighlightController implements vscode.Disposable {
     private readonly decorationManager: DecorationManager,
     private readonly treeProvider: PatchFilesTreeProvider,
     private readonly logger: LogService,
+    private readonly worktreeManager: WorktreeManager,
+    private readonly metadataStore: WorktreeMetadataStore,
+    private readonly storageRoot: string,
   ) {
     this.statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
     this.statusItem.command = 'pentimento.managePatches';
@@ -85,19 +92,17 @@ export class HighlightController implements vscode.Disposable {
     }
 
     let full: string;
-    let parent: string;
     let head: string;
     try {
       full = await this.revParse(commitHash, repo.root);
       head = (await this.git.runText(['rev-parse', 'HEAD'], { repositoryRoot: repo.root })).trim();
-      try {
-        parent = await this.revParse(`${full}^1`, repo.root);
-      } catch {
-        parent = EMPTY_TREE_HASH;
-      }
     } catch (e) {
       await this.reportError(e, '解析提交失败');
       return;
+    }
+    const parent = await this.resolveBaseParent(full, repo);
+    if (parent === undefined) {
+      return; // 用户取消父提交选择
     }
 
     let summary = full.slice(0, 8);
@@ -547,6 +552,172 @@ export class HighlightController implements vscode.Disposable {
     const blame = await this.blameProvider.blameFile(repoRoot, doc.uri.fsPath, this.blameOpts);
     this.blameCache.set(key, blame);
     return blame;
+  }
+
+  async openExactPatchRevision(commitHash?: string): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      await vscode.window.showWarningMessage('Pentimento: 请先打开一个文件以确定仓库。');
+      return;
+    }
+    const repo = await this.repoResolver.resolveRepository(editor.document.uri.fsPath);
+    if (!repo) {
+      await vscode.window.showWarningMessage('Pentimento: 当前文件不在 Git 仓库中。');
+      return;
+    }
+    let full: string;
+    if (commitHash) {
+      try {
+        full = await this.revParse(commitHash, repo.root);
+      } catch (e) {
+        await this.reportError(e, '解析提交失败');
+        return;
+      }
+    } else {
+      const session = this.currentSession();
+      const layer = session?.primaryPatchId ? session.patchLayers.get(session.primaryPatchId) : undefined;
+      if (layer?.patch.selection.commitHash) {
+        full = layer.patch.selection.commitHash!;
+      } else {
+        const input = await vscode.window.showInputBox({ prompt: 'Commit / Ref', placeHolder: 'HEAD' });
+        if (!input) {
+          return;
+        }
+        try {
+          full = await this.revParse(input, repo.root);
+        } catch (e) {
+          await this.reportError(e, '解析提交失败');
+          return;
+        }
+      }
+    }
+    const parent = await this.resolveBaseParent(full, repo);
+    if (parent === undefined) {
+      return;
+    }
+    let ws: ExactPatchWorkspace;
+    try {
+      ws = await this.worktreeManager.createOrReuse(repo, full, parent);
+    } catch (e) {
+      await this.reportError(e, '创建精确 Patch 工作区失败');
+      return;
+    }
+    await this.metadataStore.upsert(ws);
+    await openExactWorkspace(ws.worktreePath);
+  }
+
+  async removePrimaryWorktree(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      await vscode.window.showWarningMessage('Pentimento: 请先打开一个文件以确定仓库。');
+      return;
+    }
+    const repo = await this.repoResolver.resolveRepository(editor.document.uri.fsPath);
+    if (!repo) {
+      return;
+    }
+    const session = this.sessionManager.getSession(repo.root);
+    const layer = session?.primaryPatchId ? session.patchLayers.get(session.primaryPatchId) : undefined;
+    const patchHash = layer?.patch.selection.patchRevision;
+    if (!patchHash) {
+      await vscode.window.showInformationMessage('Pentimento: 无可移除的精确 Patch worktree。');
+      return;
+    }
+    const ws: ExactPatchWorkspace = {
+      repositoryRoot: repo.root,
+      repositoryId: repo.repositoryId,
+      worktreePath: worktreePathFor(this.storageRoot, repo.repositoryId, patchHash),
+      baseRevision: layer!.patch.selection.baseRevision ?? '',
+      patchRevision: patchHash,
+      createdAt: 0,
+      lastOpenedAt: 0,
+      vscodeWorkspaceOpened: false,
+    };
+    try {
+      await this.worktreeManager.remove(repo, ws);
+      await this.metadataStore.remove(ws.worktreePath);
+    } catch (e) {
+      await this.reportError(e, '移除 worktree 失败');
+    }
+  }
+
+  async cleanStaleWorktrees(): Promise<void> {
+    const list = await this.metadataStore.load();
+    let removed = 0;
+    for (const ws of list) {
+      const repo: Repository = { root: ws.repositoryRoot, repositoryId: ws.repositoryId, bare: false };
+      try {
+        await this.worktreeManager.remove(repo, ws);
+        await this.metadataStore.remove(ws.worktreePath);
+        removed++;
+      } catch {
+        // 跳过无效项
+      }
+    }
+    await vscode.window.showInformationMessage(`Pentimento: 清理了 ${removed} 个残留 worktree。`);
+  }
+
+  /** 在精确 Patch worktree 窗口激活时,自动恢复高亮。 */
+  async restoreExactWorkspaceIfApplicable(): Promise<void> {
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders || folders.length === 0) {
+      return;
+    }
+    const wsPath = folders[0].uri.fsPath;
+    const ws = await this.metadataStore.findByPath(wsPath);
+    if (!ws) {
+      return;
+    }
+    await vscode.commands.executeCommand('setContext', ContextKeys.exactWorkspace, true);
+    const repo = await this.repoResolver.resolveRepository(wsPath);
+    if (!repo) {
+      return;
+    }
+    const parent = await this.resolveBaseParent(ws.patchRevision, repo);
+    if (parent === undefined) {
+      return;
+    }
+    const selection: PatchSelection = {
+      repositoryRoot: repo.root,
+      type: 'commit',
+      baseRevision: parent,
+      patchRevision: ws.patchRevision,
+      displayRevision: ws.patchRevision,
+      commitHash: ws.patchRevision,
+      displayName: `Exact: ${ws.patchRevision.slice(0, 8)}`,
+      viewMode: 'exact-patch-revision',
+    };
+    await this.buildAndAddPatch(repo, selection, false);
+  }
+
+  /** 解析 commit 的父提交;merge commit 弹 QuickPick 选择,取消返回 undefined。 */
+  private async resolveBaseParent(full: string, repo: Repository): Promise<string | undefined> {
+    let parents: string[];
+    try {
+      const out = await this.git.runText(['rev-list', '--parents', '-n', '1', full], {
+        repositoryRoot: repo.root,
+      });
+      const parsed = parseParents(out);
+      parents = parsed?.parents ?? [];
+    } catch {
+      parents = [];
+    }
+    if (parents.length === 0) {
+      return EMPTY_TREE_HASH;
+    }
+    if (parents.length === 1) {
+      return parents[0];
+    }
+    // merge commit:选择父提交
+    const items = parents.map((p, i) => ({ label: `Parent ${i + 1}: ${p.slice(0, 8)}`, value: p }));
+    items.push({ label: '取消', value: '' });
+    const choice = await vscode.window.showQuickPick(items, {
+      placeHolder: 'Pentimento: 该提交为 Merge commit,请选择 Patch 比较基准',
+    });
+    if (!choice || choice.value === '') {
+      return undefined;
+    }
+    return choice.value;
   }
 
   private updateChrome(): void {

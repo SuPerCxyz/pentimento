@@ -58,6 +58,10 @@ const REAL_HANDLERS: Record<string, Handler> = {
   [Commands.hideAll]: (c) => c.hideAll(),
   [Commands.nextHunk]: (c) => c.nextHunk(),
   [Commands.previousHunk]: (c) => c.previousHunk(),
+  [Commands.openExactPatchRevision]: (c, ...args) =>
+    c.openExactPatchRevision(args[0] ? String(args[0]) : undefined),
+  [Commands.removeTemporaryWorktree]: (c) => c.removePrimaryWorktree(),
+  [Commands.cleanStaleWorktrees]: (c) => c.cleanStaleWorktrees(),
 };
 
 /**

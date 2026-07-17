@@ -15,6 +15,8 @@ import { DecorationManager, decorationConfigFromSettings } from './highlight/dec
 import { HighlightSessionManager } from './highlight/highlightSessionManager';
 import { HighlightController } from './highlight/highlightController';
 import { EditorTracker } from './highlight/editorTracker';
+import { WorktreeManager } from './git/worktreeManager';
+import { WorktreeMetadataStore } from './worktree/worktreeMetadataStore';
 
 /**
  * Pentimento 扩展入口。
@@ -78,6 +80,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     decorationConfigFromSettings(vscode.workspace.getConfiguration('pentimento')),
   );
   context.subscriptions.push(decorationManager);
+  const storageRoot = context.globalStorageUri.fsPath;
+  const worktreeManager = new WorktreeManager(git, storageRoot);
+  const metadataStore = new WorktreeMetadataStore(storageRoot);
 
   // 树视图
   const treeProvider = new PatchFilesTreeProvider();
@@ -95,6 +100,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     decorationManager,
     treeProvider,
     logger,
+    worktreeManager,
+    metadataStore,
+    storageRoot,
   );
   context.subscriptions.push(controller);
   const editorTracker = new EditorTracker(controller);
@@ -133,7 +141,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
   );
 
-  logger.info('Pentimento activated (stage 6: HEAD exact highlight ready)');
+  void controller.restoreExactWorkspaceIfApplicable();
+  logger.info('Pentimento activated (stage 9: worktree + exact workspace ready)');
 }
 
 export function deactivate(): void {

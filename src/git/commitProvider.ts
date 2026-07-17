@@ -38,6 +38,19 @@ export function parseCommitShow(output: string): GitCommitInfo | undefined {
   };
 }
 
+/** 解析 `git rev-list --parents -n 1 <commit>` 输出,返回 commit 与其父提交列表。纯函数。 */
+export function parseParents(revListParentsOutput: string): { commit: string; parents: string[] } | undefined {
+  const line = (revListParentsOutput ?? '').trim().split('\n')[0]?.trim() ?? '';
+  if (!line) {
+    return undefined;
+  }
+  const parts = line.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) {
+    return undefined;
+  }
+  return { commit: parts[0], parents: parts.slice(1) };
+}
+
 /**
  * Commit 元数据提供者。
  * 用户输入的 Revision 应先经 RevisionResolver 校验为完整哈希后再传入。
