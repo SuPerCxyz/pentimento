@@ -39,6 +39,13 @@ jobs:
       - name: Unit tests
         run: npm run test:unit
 
+      - name: Install xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Integration tests (VSCode via test-electron)
+        run: xvfb-run -a npm test
+        continue-on-error: true
+
       - name: Package VSIX
         run: npm run package
 

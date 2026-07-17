@@ -18,6 +18,7 @@ import { EditorTracker } from './highlight/editorTracker';
 import { WorktreeManager } from './git/worktreeManager';
 import { WorktreeMetadataStore } from './worktree/worktreeMetadataStore';
 import { SessionMetadataStore } from './highlight/sessionMetadataStore';
+import { BlameCacheStore } from './highlight/blameCacheStore';
 import { FetchService } from './git/fetchService';
 
 /**
@@ -86,6 +87,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const worktreeManager = new WorktreeManager(git, storageRoot);
   const metadataStore = new WorktreeMetadataStore(storageRoot);
   const sessionStore = new SessionMetadataStore(storageRoot);
+  const blameStore = new BlameCacheStore(storageRoot);
   const fetchService = new FetchService(git);
 
   // 树视图
@@ -107,6 +109,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     worktreeManager,
     metadataStore,
     sessionStore,
+    blameStore,
     fetchService,
     storageRoot,
   );
@@ -181,6 +184,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   void controller.restoreSessions();
+  void controller.restoreBlameCache();
   void controller.restoreExactWorkspaceIfApplicable();
   logger.info('Pentimento activated (stage 9: worktree + exact workspace ready)');
 }

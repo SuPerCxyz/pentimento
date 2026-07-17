@@ -16,6 +16,7 @@ import type { PatchLineMembership } from './lineMembershipIndex';
 import { WorktreeManager, type ExactPatchWorkspace, worktreePathFor } from '../git/worktreeManager';
 import type { WorktreeMetadataStore } from '../worktree/worktreeMetadataStore';
 import { SessionMetadataStore, type PersistedPatch } from './sessionMetadataStore';
+import { BlameCacheStore } from './blameCacheStore';
 import type { PatchHighlightLayer } from './patchHighlightLayer';
 import type { FetchService } from '../git/fetchService';
 import { openExactWorkspace } from '../ui/exactWorkspaceLauncher';
@@ -53,6 +54,7 @@ export class HighlightController implements vscode.Disposable {
   private readonly membership = new LineMembershipIndex();
   private readonly statusItem: vscode.StatusBarItem;
   private persistTimer: ReturnType<typeof setTimeout> | undefined;
+  private blamePersistTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly blameCache = new Map<string, BlameLine[]>();
   private readonly targetCommitsCache = new Map<string, Set<string>>();
   private readonly patchDisplayDiffCache = new Map<string, string>();
@@ -77,6 +79,7 @@ export class HighlightController implements vscode.Disposable {
     private readonly worktreeManager: WorktreeManager,
     private readonly metadataStore: WorktreeMetadataStore,
     private readonly sessionStore: SessionMetadataStore,
+    private readonly blameStore: BlameCacheStore,
     private readonly fetchService: FetchService,
     private readonly storageRoot: string,
   ) {
@@ -1066,13 +1069,23 @@ export class HighlightController implements vscode.Disposable {
     head: string,
     doc: vscode.TextDocument,
   ): Promise<BlameLine[]> {
-    const key = `${repoRoot}::${head}::${doc.uri.fsPath}::${doc.version}`;
+    const rel = path.relative(repoRoot, doc.uri.fsPath);
+    let blobHash = '';
+    try {
+      blobHash = (
+        await this.git.runText(['rev-parse', `${head}:${rel}`], { repositoryRoot: repoRoot })
+      ).trim();
+    } catch {
+      // 新文件/二进制等无 blob:blobHash 留空,key 仍唯一(rel + head)
+    }
+    const key = `${repoRoot}::${head}::${rel}::${blobHash}`;
     const cached = this.blameCache.get(key);
     if (cached) {
       return cached;
     }
     const blame = await this.blameProvider.blameFile(repoRoot, doc.uri.fsPath, this.blameOpts);
     this.blameCache.set(key, blame);
+    this.scheduleBlamePersist();
     return blame;
   }
 
@@ -1313,6 +1326,43 @@ export class HighlightController implements vscode.Disposable {
       await this.sessionStore.save(data);
     } catch (e) {
       this.logger.warn('persist sessions failed', e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  /** 恢复持久化的 blame 缓存到内存(activate 时调用)。 */
+  async restoreBlameCache(): Promise<void> {
+    try {
+      const data = await this.blameStore.load();
+      for (const [k, v] of Object.entries(data)) {
+        if (Array.isArray(v)) {
+          this.blameCache.set(k, v);
+        }
+      }
+    } catch {
+      // 加载失败忽略,运行时按需重算
+    }
+  }
+
+  /** 防抖持久化 blame 缓存(变更后 2s 落盘,blame 数据较大)。 */
+  private scheduleBlamePersist(): void {
+    if (this.blamePersistTimer) {
+      clearTimeout(this.blamePersistTimer);
+    }
+    this.blamePersistTimer = setTimeout(() => {
+      this.blamePersistTimer = undefined;
+      void this.persistBlameNow();
+    }, 2000);
+  }
+
+  private async persistBlameNow(): Promise<void> {
+    const data: Record<string, BlameLine[]> = {};
+    for (const [k, v] of this.blameCache) {
+      data[k] = v;
+    }
+    try {
+      await this.blameStore.save(data);
+    } catch (e) {
+      this.logger.warn('persist blame cache failed', e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -1569,6 +1619,9 @@ export class HighlightController implements vscode.Disposable {
   dispose(): void {
     if (this.persistTimer) {
       clearTimeout(this.persistTimer);
+    }
+    if (this.blamePersistTimer) {
+      clearTimeout(this.blamePersistTimer);
     }
     this.statusItem.dispose();
   }
