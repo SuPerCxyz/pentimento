@@ -339,7 +339,14 @@ export class HighlightController implements vscode.Disposable {
   ): Promise<void> {
     let patch;
     try {
-      patch = await this.patchService.buildPatch(selection);
+      patch = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'Pentimento: 正在分析 Patch…',
+          cancellable: false,
+        },
+        () => this.patchService.buildPatch(selection),
+      );
     } catch (e) {
       await this.reportError(e, '解析 Patch 失败');
       return;

@@ -85,7 +85,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const metadataStore = new WorktreeMetadataStore(storageRoot);
 
   // 树视图
-  const treeProvider = new PatchFilesTreeProvider();
+  const treeProvider = new PatchFilesTreeProvider(sessionManager);
   context.subscriptions.push(vscode.window.registerTreeDataProvider(VIEW_ID, treeProvider));
 
   // 高亮控制器 + 编辑器跟踪
