@@ -5,6 +5,10 @@
   "version": "0.0.1",
   "publisher": "pentimento-contributors",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SuPerCxyz/pentimento.git"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
