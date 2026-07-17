@@ -2,11 +2,11 @@
 
 > 状态只允许:`未开始` / `进行中` / `已完成` / `已阻塞`。功能只有同时满足"代码实现完成 + 自动测试通过 + 必要手动测试通过 + 文档更新完成 + 无阻断性缺陷"才能标记"已完成"。
 
-最后更新:阶段 11 完成(P0 核心代码 + 自动测试就绪,GUI 验证待用户)。
+最后更新:阶段 13 完成(P0 代码 + 自动测试 + 文档就绪,GUI 验证待用户)。
 
 ## 自动测试
 
-`npm run check` / `npm run lint` / `npm run compile` 全绿;`npm run test:unit` **160 通过**。CI(GitHub Actions `build.yml`)通过并产出 `pentimento-0.0.1.vsix`。
+`npm run check` / `npm run lint` / `npm run compile` 全绿;`npm run test:unit` **167 通过**(含真实 git 集成测试)。CI(GitHub Actions `build.yml`,Node 24)通过并产出 `pentimento-0.0.1.vsix`。
 
 ## 阶段进度
 
@@ -49,9 +49,10 @@ PatchFilesTreeProvider 多级树(Patch ★/●/○ -> 文件 M/A/D/R -> Hunk,点
 - 性能:Hover debounce + 文件级 blame 缓存;Decoration 仅可见编辑器;editorTracker 节流;blame/targetCommits 缓存按 repo/head/file/version。
 - 待:GUI 实测 GitLens/诊断/断点/覆盖率共存、Multi-root。
 
-### 阶段 13 - 文档 / 测试(部分完成)
-- README.md / README.zh-CN.md / SECURITY.md / CONTRIBUTING.md / CHANGELOG.md / TECHNICAL_DESIGN.md / IMPLEMENTATION_STATUS.md 已完成。
-- 待补:ARCHITECTURE.md / HISTORICAL_PATCH.md / MULTI_PATCH.md / EXTENSION_COMPATIBILITY.md / VSCode_UI_WORKFLOW.md / TEST_PLAN.md / USER_GUIDE.md;集成测试(真实临时仓库 commit 图)目前为占位入口。
+### 阶段 13 - 文档 / 集成测试(已完成)
+- 全部文档:README / README.zh-CN / SECURITY / CONTRIBUTING / CHANGELOG / TECHNICAL_DESIGN / IMPLEMENTATION_STATUS / ARCHITECTURE / HISTORICAL_PATCH / MULTI_PATCH / EXTENSION_COMPATIBILITY / VSCode_UI_WORKFLOW / TEST_PLAN / USER_GUIDE。
+- 集成测试:真实临时仓库 commit 图(A-F+X),验证 buildPatch / surviving / revision / worktree / 越界;修复 blameParser 关键 bug(`--line-porcelain` 无空行 header、orig/final 行号、分组兼容)。
+- vscode 集成测试入口就绪;端到端 GUI 验证待用户。
 
 ## P0 验收对照
 
@@ -74,9 +75,9 @@ PatchFilesTreeProvider 多级树(Patch ★/●/○ -> 文件 M/A/D/R -> Hunk,点
 | 不阻塞 Extension Host / 参数不拼 shell | 已完成 | |
 | Worktree 不破坏仓库 / 清理不误删 | 已完成 | 三重校验 |
 | 核心解析模块单元测试 | 已完成 | 160 通过 |
-| 历史 / 多 Patch 集成测试 | 进行中 | 入口就绪,真实仓库测试待阶段 13 |
+| 历史 / 多 Patch 集成测试 | 已完成 | 真实仓库 commit 图集成测试 |
 | 不支持外部 .patch / .diff | 已完成 | 无导入命令/类型 |
-| 文档完整 | 进行中 | 见阶段 13 |
+| 文档完整 | 已完成 | 全部 docs/*.md |
 
 ## P1 / P2
 

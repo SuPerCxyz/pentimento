@@ -118,4 +118,27 @@ describe('blameParser', () => {
   it('returns empty for empty input', () => {
     expect(parseBlamePorcelain('')).to.deep.equal([]);
   });
+
+  it('handles grouped entries (num-lines > 1)', () => {
+    const input = [
+      `${HASH_A} 2 2 3`,
+      'summary Harden multipath detach handling',
+      'author Zhang San',
+      'author-mail <zhang@example.com>',
+      'author-time 1721068800',
+      'filename os_brick/x.py',
+      '',
+      '\tline2',
+      '\tline3',
+      '\tline4',
+    ].join('\n');
+    const blame = parseBlamePorcelain(input);
+    expect(blame).to.have.lengthOf(3);
+    expect(blame[0].finalLine).to.equal(2);
+    expect(blame[1].finalLine).to.equal(3);
+    expect(blame[2].finalLine).to.equal(4);
+    expect(blame[0].content).to.equal('line2');
+    expect(blame[2].content).to.equal('line4');
+    expect(blame[1].commitHash).to.equal(HASH_A);
+  });
 });

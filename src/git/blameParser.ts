@@ -59,12 +59,18 @@ export function parseBlamePorcelain(input: string): BlameLine[] {
     }
     const isBoundary = m[1] === '^';
     const commitHash = m[2];
-    const finalLine = Number(m[3]);
-    const originalLine = Number(m[4]);
+    // git blame --line-porcelain 哈希行:<hash> <orig-line> <final-line> [<num>]
+    const origStart = Number(m[3]);
+    const finalStart = Number(m[4]);
     i++;
 
     const headers: Record<string, string> = {};
-    while (i < lines.length && lines[i] !== '') {
+    while (
+      i < lines.length &&
+      lines[i] !== '' &&
+      !lines[i].startsWith('\t') &&
+      !HASH_LINE.test(lines[i])
+    ) {
       const h = lines[i];
       const sp = h.indexOf(' ');
       const key = sp >= 0 ? h.slice(0, sp) : h;
@@ -72,35 +78,36 @@ export function parseBlamePorcelain(input: string): BlameLine[] {
       headers[key] = val;
       i++;
     }
-    // 跳过分隔空行
-    if (i < lines.length && lines[i] === '') {
+    // 跳过分隔空行(--porcelain 在内容前有空行;--line-porcelain 无)
+    while (i < lines.length && lines[i] === '') {
       i++;
     }
 
-    let content = '';
-    if (i < lines.length && lines[i].startsWith('\t')) {
-      content = lines[i].slice(1);
+    // 读取连续的 tab 内容行:兼容 per-line(--line-porcelain)与 grouped 两种格式。
+    let k = 0;
+    while (i < lines.length && lines[i].startsWith('\t')) {
+      const content = lines[i].slice(1);
+      result.push({
+        commitHash,
+        shortHash: commitHash.slice(0, 8),
+        finalLine: finalStart + k,
+        originalLine: origStart + k,
+        isBoundary,
+        isUncommitted: isUncommitted(commitHash),
+        summary: headers['summary'] ?? '',
+        authorName: headers['author'] ?? '',
+        authorEmail: stripMail(headers['author-mail'] ?? ''),
+        authorTimestamp: headers['author-time'] ? Number(headers['author-time']) : 0,
+        committerName: headers['committer'] ?? undefined,
+        committerTimestamp: headers['committer-time']
+          ? Number(headers['committer-time'])
+          : undefined,
+        originalPath: headers['filename'] ?? undefined,
+        content,
+      });
       i++;
+      k++;
     }
-
-    result.push({
-      commitHash,
-      shortHash: commitHash.slice(0, 8),
-      finalLine,
-      originalLine,
-      isBoundary,
-      isUncommitted: isUncommitted(commitHash),
-      summary: headers['summary'] ?? '',
-      authorName: headers['author'] ?? '',
-      authorEmail: stripMail(headers['author-mail'] ?? ''),
-      authorTimestamp: headers['author-time'] ? Number(headers['author-time']) : 0,
-      committerName: headers['committer'] ?? undefined,
-      committerTimestamp: headers['committer-time']
-        ? Number(headers['committer-time'])
-        : undefined,
-      originalPath: headers['filename'] ?? undefined,
-      content,
-    });
   }
   return result;
 }
