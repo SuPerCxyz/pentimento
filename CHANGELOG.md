@@ -7,6 +7,18 @@ Pentimento 所有重要变更将记录在本文件中。
 
 ## [Unreleased]
 
+### Added - P1(演化统计 / 会话持久化 / pathEvolution)
+
+- 演化统计:`showEvolutionSummary` 增强为计算存活率;对存活模式 Patch
+  基于当前 HEAD blame 计算原始/存活/未存活行数。
+- 会话持久化:新增 `SessionMetadataStore`,持久化 PatchSelection(含
+  自定义颜色与显隐);activate 时按 selection 重建(exact 模式由
+  worktree 恢复);变更后 500ms 防抖落盘。
+- 文件 pathEvolution:新增 `resolveHistoricalPaths`(`git log --follow`);
+  `applyToEditor` 文件匹配失败时查历史路径,跨 rename 关联 Patch 文件。
+- 单元与集成测试:`resolveHistoricalPaths` 跟随 rename、
+  `SessionMetadataStore` roundtrip。186 passing。
+
 ### Added - Stage 1(项目脚手架)
 
 - 初始化 `pentimento` 仓库与 VSCode 扩展项目。

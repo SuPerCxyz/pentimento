@@ -8,6 +8,7 @@ import { RevisionResolver } from '../../src/git/revisionResolver';
 import { BlameProvider } from '../../src/git/blameProvider';
 import { findSurvivingRanges } from '../../src/patch/survivingLineMapper';
 import { WorktreeManager } from '../../src/git/worktreeManager';
+import { resolveHistoricalPaths } from '../../src/git/pathEvolutionResolver';
 import { GitError } from '../../src/git/gitErrors';
 import { createCommitGraph, cleanupGraph, type CommitGraph } from '../fixtures/commitGraph';
 
@@ -132,5 +133,11 @@ describe('integration: commit graph (real git)', function () {
     } finally {
       fs.rmSync(storageRoot, { recursive: true, force: true });
     }
+  });
+
+  it('resolveHistoricalPaths follows rename file.py -> src/new_file.py', async () => {
+    const paths = await resolveHistoricalPaths(runner(), graph.root, 'src/new_file.py');
+    expect(paths).to.include('src/new_file.py');
+    expect(paths).to.include('file.py');
   });
 });

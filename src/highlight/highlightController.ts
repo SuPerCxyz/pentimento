@@ -11,9 +11,11 @@ import { PatchService } from '../patch/patchService';
 import type { PatchSelection, HistoricalPatchViewMode } from '../patch/models';
 import { findSurvivingRanges } from '../patch/survivingLineMapper';
 import { projectRanges } from '../patch/projectedFootprintMapper';
+import { resolveHistoricalPaths } from '../git/pathEvolutionResolver';
 import type { PatchLineMembership } from './lineMembershipIndex';
 import { WorktreeManager, type ExactPatchWorkspace, worktreePathFor } from '../git/worktreeManager';
 import type { WorktreeMetadataStore } from '../worktree/worktreeMetadataStore';
+import { SessionMetadataStore, type PersistedPatch } from './sessionMetadataStore';
 import type { FetchService } from '../git/fetchService';
 import { openExactWorkspace } from '../ui/exactWorkspaceLauncher';
 import { parseParents } from '../git/commitProvider';
@@ -29,6 +31,7 @@ import {
   showAll as showAllLayers,
   hideAll as hideAllLayers,
   setLayerColor,
+  setLayerEnabled,
 } from './repositoryHighlightSession';
 import { ContextKeys, ConfigKeys, DEFAULT_MAX_ACTIVE_PATCHES, PATCH_COLOR_PRESETS, isValidHexColor } from '../constants';
 import type { LogService } from '../utils/logging';
@@ -46,9 +49,11 @@ import { GitError, toUserMessage } from '../git/gitErrors';
 export class HighlightController implements vscode.Disposable {
   private readonly membership = new LineMembershipIndex();
   private readonly statusItem: vscode.StatusBarItem;
+  private persistTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly blameCache = new Map<string, BlameLine[]>();
   private readonly targetCommitsCache = new Map<string, Set<string>>();
   private readonly patchDisplayDiffCache = new Map<string, string>();
+  private readonly pathEvolutionCache = new Map<string, string[]>();
   private blameOpts: BlameOptions = {
     ignoreWhitespace: false,
     detectMovedLines: true,
@@ -68,6 +73,7 @@ export class HighlightController implements vscode.Disposable {
     private readonly logger: LogService,
     private readonly worktreeManager: WorktreeManager,
     private readonly metadataStore: WorktreeMetadataStore,
+    private readonly sessionStore: SessionMetadataStore,
     private readonly fetchService: FetchService,
     private readonly storageRoot: string,
   ) {
@@ -226,6 +232,7 @@ export class HighlightController implements vscode.Disposable {
   async refresh(): Promise<void> {
     this.membership.clearAll();
     this.blameCache.clear();
+    this.pathEvolutionCache.clear();
     await this.applyVisibleEditors();
     this.updateChrome();
   }
@@ -252,6 +259,7 @@ export class HighlightController implements vscode.Disposable {
       this.blameCache.clear();
       this.targetCommitsCache.clear();
       this.patchDisplayDiffCache.clear();
+      this.pathEvolutionCache.clear();
       this.membership.clearAll();
       await this.applyVisibleEditors();
       this.updateChrome();
@@ -555,7 +563,18 @@ export class HighlightController implements vscode.Disposable {
       if (!layer.enabled) {
         continue;
       }
-      const file = layer.patch.files.find((f) => f.newPath === rel || f.oldPath === rel);
+      let file = layer.patch.files.find((f) => f.newPath === rel || f.oldPath === rel);
+      if (!file) {
+        // pathEvolution:文件可能已被 rename,查历史路径关联
+        const historical = await this.getHistoricalPaths(repo.root, rel);
+        if (historical.length > 0) {
+          file = layer.patch.files.find(
+            (f) =>
+              (f.newPath !== undefined && historical.includes(f.newPath)) ||
+              (f.oldPath !== undefined && historical.includes(f.oldPath)),
+          );
+        }
+      }
       if (!file) {
         continue;
       }
@@ -905,6 +924,127 @@ export class HighlightController implements vscode.Disposable {
     await this.buildAndAddPatch(repo, selection, false);
   }
 
+  /**
+   * 恢复持久化的高亮会话(activate 时调用)。
+   * exact-patch-revision 不在此恢复(由 worktree 恢复);其余按 selection 重建。
+   */
+  async restoreSessions(): Promise<void> {
+    let data: Record<string, PersistedPatch[]>;
+    try {
+      data = await this.sessionStore.load();
+    } catch {
+      return;
+    }
+    const repos = Object.entries(data).filter(([, list]) => Array.isArray(list) && list.length > 0);
+    if (repos.length === 0) {
+      return;
+    }
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: 'Pentimento: 正在恢复高亮会话…',
+        cancellable: false,
+      },
+      async () => {
+        for (const [repoRoot, list] of repos) {
+          try {
+            const repo = await this.repoResolver.resolveRepository(repoRoot);
+            if (!repo) {
+              continue;
+            }
+            const head = (
+              await this.git.runText(['rev-parse', 'HEAD'], { repositoryRoot: repo.root })
+            ).trim();
+            for (const p of list) {
+              const displayRevision =
+                p.selection.viewMode === 'exact-patch-revision'
+                  ? p.selection.displayRevision
+                  : head;
+              const sel: PatchSelection = { ...p.selection, displayRevision };
+              try {
+                const patch = await this.patchService.buildPatch(sel);
+                const session = this.sessionManager.getOrCreateSession(
+                  repo.root,
+                  displayRevision ?? head,
+                );
+                const res = addPatch(session, repo.repositoryId, patch, {
+                  maxActive: DEFAULT_MAX_ACTIVE_PATCHES,
+                });
+                if (res.layer) {
+                  if (p.customColor) {
+                    setLayerColor(session, res.layer.patchId, p.customColor);
+                  }
+                  if (!p.enabled) {
+                    setLayerEnabled(session, res.layer.patchId, false);
+                  }
+                }
+              } catch {
+                // 单个 patch 恢复失败:跳过
+              }
+            }
+          } catch {
+            // 单个仓库恢复失败:跳过
+          }
+        }
+        await this.applyVisibleEditors();
+        this.updateChrome();
+      },
+    );
+  }
+
+  /** 防抖持久化当前会话(变更后 500ms 落盘)。 */
+  private schedulePersist(): void {
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer);
+    }
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = undefined;
+      void this.persistSessionsNow();
+    }, 500);
+  }
+
+  private async persistSessionsNow(): Promise<void> {
+    const data: Record<string, PersistedPatch[]> = {};
+    for (const s of this.sessionManager.allSessions()) {
+      const list: PersistedPatch[] = [];
+      for (const l of s.patchLayers.values()) {
+        if (l.viewMode === 'exact-patch-revision') {
+          continue; // exact 由 worktree 恢复
+        }
+        list.push({
+          selection: l.selection,
+          customColor: l.customColor,
+          enabled: l.enabled,
+        });
+      }
+      if (list.length > 0) {
+        data[s.repositoryRoot] = list;
+      }
+    }
+    try {
+      await this.sessionStore.save(data);
+    } catch (e) {
+      this.logger.warn('persist sessions failed', e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  /** 获取文件的历史路径(跟随 rename),缓存结果。 */
+  private async getHistoricalPaths(repoRoot: string, rel: string): Promise<string[]> {
+    const key = `${repoRoot}:${rel}`;
+    const cached = this.pathEvolutionCache.get(key);
+    if (cached) {
+      return cached;
+    }
+    let paths: string[] = [];
+    try {
+      paths = await resolveHistoricalPaths(this.git, repoRoot, rel);
+    } catch {
+      paths = [];
+    }
+    this.pathEvolutionCache.set(key, paths);
+    return paths;
+  }
+
   /** 解析 commit 的父提交;merge commit 弹 QuickPick 选择,取消返回 undefined。 */
   private async resolveBaseParent(full: string, repo: Repository): Promise<string | undefined> {
     let parents: string[];
@@ -982,29 +1122,87 @@ export class HighlightController implements vscode.Disposable {
     await this.buildAndAddPatch(repo, { ...sel, viewMode: 'projected-footprint' }, false);
   }
 
-  /** 显示当前活跃 Patch 的演化摘要(模式/文件/增删行)。 */
+  /**
+   * 显示当前活跃 Patch 的演化统计:模式/文件/增删行;
+   * 对存活模式 Patch 额外计算当前文件的存活率(基于当前 HEAD blame)。
+   */
   async showEvolutionSummary(): Promise<void> {
-    const sessions = this.sessionManager.allSessions();
-    const items: vscode.QuickPickItem[] = [];
-    for (const s of sessions) {
-      for (const l of s.patchLayers.values()) {
-        if (!l.enabled) {
-          continue;
-        }
-        const hash = l.patch.selection.commitHash?.slice(0, 8) ?? '?';
-        items.push({
-          label: `${hash} ${l.label}`,
-          description: `${viewModeText(l.viewMode)} · ${l.patch.files.length} 文件`,
-          detail: `+${l.patch.totalAddedLines} -${l.patch.totalDeletedLines}`,
-        });
-      }
-    }
-    if (items.length === 0) {
-      await vscode.window.showInformationMessage('Pentimento: 无活跃 Patch。');
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      await vscode.window.showWarningMessage('Pentimento: 请先打开一个文件以查看演化统计。');
       return;
     }
-    await vscode.window.showQuickPick(items, {
-      placeHolder: 'Pentimento: Patch 演化摘要',
+    const repo = await this.repoResolver.resolveRepository(editor.document.uri.fsPath);
+    if (!repo) {
+      return;
+    }
+    const session = this.sessionManager.getSession(repo.root);
+    if (!session || session.patchLayers.size === 0) {
+      await vscode.window.showInformationMessage('Pentimento: 当前没有活跃 Patch。');
+      return;
+    }
+    const items = [...session.patchLayers.values()].map((l) => ({
+      label: `${l.patch.selection.commitHash?.slice(0, 8) ?? '?'} ${l.label}`,
+      description: this.viewModeLabelOf(l.viewMode),
+      detail: `${l.patch.files.length} 文件 · +${l.patch.totalAddedLines} -${l.patch.totalDeletedLines}`,
+      layer: l,
+    }));
+    const picked = await vscode.window.showQuickPick(items, {
+      placeHolder: 'Pentimento: 选择 Patch 查看演化统计',
+    });
+    if (!picked) {
+      return;
+    }
+    const layer = picked.layer;
+    const statLines: string[] = [
+      `Patch:${layer.patch.selection.commitHash?.slice(0, 8) ?? '?'} ${layer.label}`,
+      `模式:${this.viewModeLabelOf(layer.viewMode)}`,
+      `文件数:${layer.patch.files.length}`,
+      `新增:+${layer.patch.totalAddedLines}  删除:-${layer.patch.totalDeletedLines}`,
+    ];
+    if (layer.viewMode === 'surviving-lines') {
+      if (editor.document.isDirty) {
+        statLines.push('');
+        statLines.push('提示:请先保存当前文件,以计算存活统计。');
+      } else {
+        const rel = path.relative(repo.root, editor.document.uri.fsPath);
+        const file = layer.patch.files.find((f) => f.newPath === rel || f.oldPath === rel);
+        if (!file) {
+          statLines.push('');
+          statLines.push('当前文件不在该 Patch 中。');
+        } else {
+          const original = file.originalAddedRanges.reduce(
+            (s, r) => s + (r.endLine - r.startLine + 1),
+            0,
+          );
+          try {
+            const blame = await this.getCachedBlame(
+              repo.root,
+              session.displayRevision,
+              editor.document,
+            );
+            const targets = await this.getTargetCommits(layer, repo.root);
+            const survivingRanges = findSurvivingRanges(blame, targets);
+            const surviving = survivingRanges.reduce(
+              (s, r) => s + (r.endLine - r.startLine + 1),
+              0,
+            );
+            const pct = original > 0 ? Math.round((surviving / original) * 100) : 0;
+            statLines.push('');
+            statLines.push(`当前文件 ${rel}:`);
+            statLines.push(`  原始新增 ${original} 行`);
+            statLines.push(`  存活 ${surviving} 行(${pct}%)`);
+            statLines.push(`  未存活 ${original - surviving} 行(被修改/删除/移动)`);
+          } catch {
+            statLines.push('');
+            statLines.push('当前文件存活统计计算失败(blame 不可用)。');
+          }
+        }
+      }
+    }
+    const statItems = statLines.map((l) => ({ label: l }));
+    await vscode.window.showQuickPick(statItems, {
+      placeHolder: 'Pentimento: Patch 演化统计(按 Esc 关闭)',
       canPickMany: false,
     });
   }
@@ -1068,6 +1266,7 @@ export class HighlightController implements vscode.Disposable {
       this.statusItem.hide();
     }
     this.treeProvider.refresh();
+    this.schedulePersist();
   }
 
   private async reportError(e: unknown, prefix: string): Promise<void> {
@@ -1080,19 +1279,9 @@ export class HighlightController implements vscode.Disposable {
   }
 
   dispose(): void {
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer);
+    }
     this.statusItem.dispose();
-  }
-}
-
-function viewModeText(mode: string): string {
-  switch (mode) {
-    case 'exact-patch-revision':
-      return '精确';
-    case 'surviving-lines':
-      return '存活';
-    case 'projected-footprint':
-      return '投影';
-    default:
-      return mode;
   }
 }
