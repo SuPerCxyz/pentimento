@@ -35,8 +35,17 @@ export class DecorationManager implements vscode.Disposable {
     Object.assign(this.config, config);
   }
 
-  /** 获取某颜色槽对应的 DecorationType(惰性创建并缓存)。 */
-  getLayerType(slot: number): vscode.TextEditorDecorationType {
+  /**
+   * 获取某 Patch 图层对应的 DecorationType(惰性创建并缓存)。
+   * 若提供 customColor(hex),使用自定义颜色;否则使用颜色槽对应主题色。
+   */
+  getLayerType(
+    slot: number,
+    customColor?: { background: string; border: string },
+  ): vscode.TextEditorDecorationType {
+    if (customColor) {
+      return this.getOrCreate(`custom:${customColor.background}:${customColor.border}`, customColor);
+    }
     return this.getOrCreate(`layer:${slot}`, colorIdsForSlot(slot));
   }
 

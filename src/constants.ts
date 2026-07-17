@@ -41,6 +41,7 @@ export const Commands = {
   openExactPatchRevision: 'pentimento.openExactPatchRevision',
   projectOntoCurrentRevision: 'pentimento.projectOntoCurrentRevision',
   setPrimaryPatch: 'pentimento.setPrimaryPatch',
+  setPatchColor: 'pentimento.setPatchColor',
   togglePatchVisibility: 'pentimento.togglePatchVisibility',
   removePatch: 'pentimento.removePatch',
   managePatches: 'pentimento.managePatches',
@@ -54,6 +55,7 @@ export const Commands = {
   hideAll: 'pentimento.hideAll',
   toggle: 'pentimento.toggle',
   refresh: 'pentimento.refresh',
+  fetch: 'pentimento.fetch',
   clearAll: 'pentimento.clearAll',
   switchHistoricalViewMode: 'pentimento.switchHistoricalViewMode',
   showEvolutionSummary: 'pentimento.showEvolutionSummary',
@@ -83,12 +85,16 @@ export const ConfigKeys = {
   multiPatchMaxActivePatches: 'pentimento.multiPatch.maxActivePatches',
   multiPatchHoverDefaultAction: 'pentimento.multiPatch.hoverDefaultAction',
   multiPatchOverlapStyle: 'pentimento.multiPatch.overlapStyle',
+  multiPatchSortBy: 'pentimento.multiPatch.sortBy',
+  multiPatchGroupBy: 'pentimento.multiPatch.groupBy',
   historicalDefaultMode: 'pentimento.historical.defaultMode',
   historicalPreferExactWorktreeForNonAncestor: 'pentimento.historical.preferExactWorktreeForNonAncestor',
   exactPatchReuseWorktree: 'pentimento.exactPatch.reuseWorktree',
   exactPatchCleanupOnExit: 'pentimento.exactPatch.cleanupOnExit',
   largePatchMaxFiles: 'pentimento.largePatch.maxFiles',
   largePatchMaxAddedLines: 'pentimento.largePatch.maxAddedLines',
+  gitAutoFetchEnabled: 'pentimento.git.autoFetch.enabled',
+  gitAutoFetchInterval: 'pentimento.git.autoFetch.intervalMinutes',
   gitTimeout: 'pentimento.git.timeout',
   gitMaxConcurrentCommands: 'pentimento.git.maxConcurrentCommands',
   gitMaxOutputBytes: 'pentimento.git.maxOutputBytes',
@@ -116,3 +122,18 @@ export const ColorIds = {
   ambiguousBackground: 'pentimento.ambiguousBackground',
   ambiguousBorder: 'pentimento.ambiguousBorder',
 } as const;
+
+/** 自定义 Patch 颜色预设(浅亮 hex,与图层默认色一致)。 */
+export const PATCH_COLOR_PRESETS: readonly { label: string; background: string; border: string }[] = [
+  { label: '绿 (Layer 1)', background: '#4ade8040', border: '#4ade80ff' },
+  { label: '青 (Layer 2)', background: '#22d3ee40', border: '#22d3eeff' },
+  { label: '蓝 (Layer 3)', background: '#60a5fa40', border: '#60a5faff' },
+  { label: '紫 (Layer 4)', background: '#a78bfa40', border: '#a78bfaff' },
+  { label: '粉 (Layer 5)', background: '#f472b640', border: '#f472b6ff' },
+  { label: '橙 (Layer 6)', background: '#fbbf2440', border: '#fbbf24ff' },
+];
+
+/** hex 颜色校验(支持 #RGB / #RRGGBB / #RRGGBBAA)。 */
+export function isValidHexColor(c: string): boolean {
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(c);
+}

@@ -55,9 +55,27 @@ export function buildLineMapFromDiff(diff: string): LineMapResult {
   let oldLine = 1;
   let newLine = 1;
   let inHunk = false;
+  let curHunkHasAdded = false;
+  let curHunkNewStart = 0;
+  const pendingDeleted: number[] = [];
+
+  const flushHunk = () => {
+    for (const dl of pendingDeleted) {
+      if (curHunkHasAdded) {
+        // hunk 同时含 + 与 -:视为 modified(行被后续修改),位置近似取 hunk newStart
+        map.set(dl, { status: 'modified', displayLine: curHunkNewStart });
+      } else {
+        map.set(dl, { status: 'deleted' });
+      }
+    }
+    pendingDeleted.length = 0;
+    curHunkHasAdded = false;
+  };
+
   for (const line of lines) {
     const m = HUNK_HEADER.exec(line);
     if (m) {
+      flushHunk();
       const oldStart = Number(m[1]);
       const newStart = Number(m[3]);
       while (oldLine < oldStart) {
@@ -68,15 +86,18 @@ export function buildLineMapFromDiff(diff: string): LineMapResult {
       oldLine = oldStart;
       newLine = newStart;
       inHunk = true;
+      curHunkHasAdded = false;
+      curHunkNewStart = newStart;
       continue;
     }
     if (!inHunk || isMetaLine(line)) {
       continue;
     }
     if (line.startsWith('+')) {
+      curHunkHasAdded = true;
       newLine++;
     } else if (line.startsWith('-')) {
-      map.set(oldLine, { status: 'deleted' });
+      pendingDeleted.push(oldLine);
       oldLine++;
     } else if (line.startsWith(' ')) {
       map.set(oldLine, { displayLine: newLine, status: 'unchanged' });
@@ -84,6 +105,7 @@ export function buildLineMapFromDiff(diff: string): LineMapResult {
       newLine++;
     }
   }
+  flushHunk();
   return { map, offset: newLine - oldLine };
 }
 
@@ -149,6 +171,9 @@ export function projectRanges(
       } else if (entry.status === 'deleted') {
         st = 'deleted';
         disp = undefined;
+      } else if (entry.status === 'modified') {
+        st = 'modified';
+        disp = entry.displayLine;
       } else {
         st = entry.displayLine === L ? 'unchanged' : 'moved';
         disp = entry.displayLine;
@@ -156,7 +181,7 @@ export function projectRanges(
 
       const contiguous =
         segStatus === st &&
-        (st === 'deleted' || (disp !== undefined && segDispEnd !== undefined && disp === segDispEnd + 1));
+        (st === 'deleted' || st === 'modified' || (disp !== undefined && segDispEnd !== undefined && disp === segDispEnd + 1));
       if (segStatus === undefined || !contiguous) {
         flush();
         segStart = L;

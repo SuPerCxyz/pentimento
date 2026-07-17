@@ -62,7 +62,9 @@
       { "command": "pentimento.removeTemporaryWorktree", "title": "Pentimento: 移除临时 Worktree" },
       { "command": "pentimento.cleanStaleWorktrees", "title": "Pentimento: 清理残留 Worktree" },
       { "command": "pentimento.openOutputLog", "title": "Pentimento: 打开输出日志" },
-      { "command": "pentimento.showDiagnostics", "title": "Pentimento: 显示诊断" }
+      { "command": "pentimento.showDiagnostics", "title": "Pentimento: 显示诊断" },
+      { "command": "pentimento.setPatchColor", "title": "Pentimento: 设置 Patch 颜色" },
+      { "command": "pentimento.fetch", "title": "Pentimento: Fetch 并刷新" }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -81,6 +83,13 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "pentimento.patches",
+        "contents": "尚未高亮任何 Git Patch。\n开始:在代码行悬停后点击「添加此提交到高亮」,或使用下方命令。\n[添加提交或范围](command:pentimento.addRef)\n[高亮工作区修改](command:pentimento.highlightWorkingTree)\n[高亮暂存区修改](command:pentimento.highlightStaged)\n[Fetch 并刷新](command:pentimento.fetch)",
+        "when": "!pentimento.hasActivePatches"
+      }
+    ],
     "menus": {
       "commandPalette": [
         { "command": "pentimento.addCommitFromLine", "when": "pentimento.enabled" },
@@ -113,7 +122,9 @@
         { "command": "pentimento.removeTemporaryWorktree", "when": "pentimento.enabled" },
         { "command": "pentimento.cleanStaleWorktrees", "when": "pentimento.enabled" },
         { "command": "pentimento.openOutputLog", "when": "true" },
-        { "command": "pentimento.showDiagnostics", "when": "true" }
+        { "command": "pentimento.showDiagnostics", "when": "true" },
+        { "command": "pentimento.setPatchColor", "when": "pentimento.hasActivePatches" },
+        { "command": "pentimento.fetch", "when": "pentimento.enabled" }
       ],
       "view/title": [
         {
@@ -173,18 +184,79 @@
         "pentimento.multiPatch.maxActivePatches": { "type": "number", "default": 6, "minimum": 1, "maximum": 12, "markdownDescription": "同时启用的最大 Patch 数。" },
         "pentimento.multiPatch.hoverDefaultAction": { "type": "string", "enum": ["add", "replace", "ask"], "default": "add", "enumDescriptions": ["添加到现有图层", "替换全部图层", "每次询问"], "markdownDescription": "Hover 添加 Patch 的默认动作。" },
         "pentimento.multiPatch.overlapStyle": { "type": "string", "enum": ["combined"], "default": "combined", "markdownDescription": "重叠行视觉样式。" },
+        "pentimento.multiPatch.sortBy": { "type": "string", "enum": ["added", "name", "color"], "default": "added", "enumDescriptions": ["按添加顺序", "按名称", "按颜色"], "markdownDescription": "Patch 在树视图中的排序方式。" },
+        "pentimento.multiPatch.groupBy": { "type": "string", "enum": ["none", "viewMode"], "default": "none", "enumDescriptions": ["不分组", "按查看模式分组"], "markdownDescription": "Patch 在树视图中的分组方式。" },
         "pentimento.historical.defaultMode": { "type": "string", "enum": ["ask", "surviving-lines", "exact-patch-revision"], "default": "ask", "enumDescriptions": ["每次询问", "存活行", "精确 Patch 版本"], "markdownDescription": "历史 Patch 默认模式。" },
         "pentimento.historical.preferExactWorktreeForNonAncestor": { "type": "boolean", "default": true, "markdownDescription": "非祖先提交优先使用精确 worktree。" },
         "pentimento.exactPatch.reuseWorktree": { "type": "boolean", "default": true, "markdownDescription": "复用已存在的精确 worktree。" },
         "pentimento.exactPatch.cleanupOnExit": { "type": "boolean", "default": false, "markdownDescription": "插件停用时移除所有受管 worktree。" },
         "pentimento.largePatch.maxFiles": { "type": "number", "default": 500, "minimum": 1, "markdownDescription": "单个 Patch 最多分析的文件数(超出截断)。" },
         "pentimento.largePatch.maxAddedLines": { "type": "number", "default": 20000, "minimum": 1, "markdownDescription": "单个 Patch 最多分析的新增行数(超出截断)。" },
+        "pentimento.git.autoFetch.enabled": { "type": "boolean", "default": false, "markdownDescription": "启用后台自动 fetch(仅 fetch,不切换分支/不改工作区)。" },
+        "pentimento.git.autoFetch.intervalMinutes": { "type": "number", "default": 30, "minimum": 1, "markdownDescription": "后台自动 fetch 间隔(分钟)。" },
         "pentimento.git.timeout": { "type": "number", "default": 30000, "minimum": 1000, "markdownDescription": "Git 命令超时(毫秒)。" },
         "pentimento.git.maxConcurrentCommands": { "type": "number", "default": 4, "minimum": 1, "maximum": 32, "markdownDescription": "最大并发 Git 命令数。" },
         "pentimento.git.maxOutputBytes": { "type": "number", "default": 52428800, "minimum": 1024, "markdownDescription": "Git 命令最大输出字节数。" },
         "pentimento.logging.level": { "type": "string", "enum": ["error", "warn", "info", "debug", "trace"], "default": "info", "markdownDescription": "输出通道日志级别。" }
       }
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "pentimento.gettingStarted",
+        "title": "Pentimento 入门",
+        "description": "在真实代码中高亮 Git Patch 新增内容",
+        "steps": [
+          {
+            "id": "hover",
+            "title": "悬停查看提交",
+            "description": "悬停任意代码行,查看其 Git 提交、作者与时间。",
+            "media": { "markdown": "悬停代码行即可看到 **Pentimento** Hover,显示提交哈希、作者、时间与摘要,并提供高亮操作。" }
+          },
+          {
+            "id": "highlight",
+            "title": "高亮 Patch",
+            "description": "点击 Hover 中的「添加此提交到高亮」,将该提交新增行高亮在真实代码中。",
+            "media": { "markdown": "高亮以淡色背景 + 左边框呈现,不打开 Diff Editor,不影响代码跳转与语言服务。" },
+            "completionEvents": [ "onCommand:pentimento.addCommitFromLine" ]
+          },
+          {
+            "id": "workingTree",
+            "title": "高亮未提交修改",
+            "description": "直接高亮工作区或暂存区的未提交新增行。",
+            "media": { "markdown": "命令面板执行「高亮工作区修改」或「高亮暂存区修改」,无需提交即可看到本地新增内容。" },
+            "completionEvents": [ "onCommand:pentimento.highlightWorkingTree" ]
+          },
+          {
+            "id": "historical",
+            "title": "历史 Patch 查看",
+            "description": "为历史提交选择查看模式:存活行、投影到当前版本、或精确 Patch 版本。",
+            "media": { "markdown": "祖先提交默认「存活行」(基于当前 HEAD blame);非祖先提交可「投影」或打开「精确 Patch 工作区」。" },
+            "completionEvents": [ "onCommand:pentimento.switchHistoricalViewMode" ]
+          },
+          {
+            "id": "manage",
+            "title": "管理多 Patch",
+            "description": "在左侧 PENTIMENTO 视图管理多 Patch、Hunk 跳转、精确 worktree。",
+            "media": { "markdown": "Activity Bar 的 PENTIMENTO 视图:★ 主要 / ● 启用 / ○ 隐藏,支持添加、显隐、移除、Hunk 导航、精确 Patch 工作区。" },
+            "completionEvents": [ "onCommand:pentimento.addRef" ]
+          },
+          {
+            "id": "customize",
+            "title": "自定义颜色与排序",
+            "description": "为每个 Patch 设置自定义颜色,调整树视图排序与分组。",
+            "media": { "markdown": "命令「设置 Patch 颜色」可选预设浅亮色或自定义 hex;在设置中调整 `multiPatch.sortBy` 与 `multiPatch.groupBy`。" },
+            "completionEvents": [ "onCommand:pentimento.setPatchColor" ]
+          },
+          {
+            "id": "fetch",
+            "title": "受控 Fetch",
+            "description": "在 VSCode 内 fetch origin 并刷新高亮,无需打开终端。",
+            "media": { "markdown": "命令「Fetch 并刷新」安全拉取 remote-tracking ref(不切换分支、不改工作区);可在设置开启后台自动 fetch。" },
+            "completionEvents": [ "onCommand:pentimento.fetch" ]
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",

@@ -155,6 +155,24 @@ export function setPrimary(session: RepositoryHighlightSession, patchId: string)
   return true;
 }
 
+/**
+ * 设置某 Patch 的自定义颜色(覆盖 colorSlot)。
+ * 传入 undefined 清除自定义颜色,回退到 colorSlot 主题色。
+ */
+export function setLayerColor(
+  session: RepositoryHighlightSession,
+  patchId: string,
+  customColor: { background: string; border: string } | undefined,
+): boolean {
+  const layer = session.patchLayers.get(patchId);
+  if (!layer) {
+    return false;
+  }
+  layer.customColor = customColor;
+  session.updatedAt = Date.now();
+  return true;
+}
+
 export function showOnly(session: RepositoryHighlightSession, patchId: string): boolean {
   if (!session.patchLayers.has(patchId)) {
     return false;

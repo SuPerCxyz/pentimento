@@ -8,12 +8,13 @@ import type { CommitProvider } from '../git/commitProvider';
 import type { BlameProvider, BlameOptions } from '../git/blameProvider';
 import type { BlameLine } from '../git/blameParser';
 import { PatchService } from '../patch/patchService';
-import type { PatchSelection } from '../patch/models';
+import type { PatchSelection, HistoricalPatchViewMode } from '../patch/models';
 import { findSurvivingRanges } from '../patch/survivingLineMapper';
 import { projectRanges } from '../patch/projectedFootprintMapper';
 import type { PatchLineMembership } from './lineMembershipIndex';
 import { WorktreeManager, type ExactPatchWorkspace, worktreePathFor } from '../git/worktreeManager';
 import type { WorktreeMetadataStore } from '../worktree/worktreeMetadataStore';
+import type { FetchService } from '../git/fetchService';
 import { openExactWorkspace } from '../ui/exactWorkspaceLauncher';
 import { parseParents } from '../git/commitProvider';
 import { HighlightSessionManager } from './highlightSessionManager';
@@ -27,8 +28,9 @@ import {
   showOnly,
   showAll as showAllLayers,
   hideAll as hideAllLayers,
+  setLayerColor,
 } from './repositoryHighlightSession';
-import { ContextKeys, ConfigKeys, DEFAULT_MAX_ACTIVE_PATCHES } from '../constants';
+import { ContextKeys, ConfigKeys, DEFAULT_MAX_ACTIVE_PATCHES, PATCH_COLOR_PRESETS, isValidHexColor } from '../constants';
 import type { LogService } from '../utils/logging';
 import type { PatchFilesTreeProvider } from '../tree/patchFilesTreeProvider';
 import { GitError, toUserMessage } from '../git/gitErrors';
@@ -66,6 +68,7 @@ export class HighlightController implements vscode.Disposable {
     private readonly logger: LogService,
     private readonly worktreeManager: WorktreeManager,
     private readonly metadataStore: WorktreeMetadataStore,
+    private readonly fetchService: FetchService,
     private readonly storageRoot: string,
   ) {
     this.statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
@@ -141,8 +144,37 @@ export class HighlightController implements vscode.Disposable {
     try {
       resolved = await this.revisionResolver.resolve(input, repo.root);
     } catch (e) {
-      await this.reportError(e, '解析 Revision 失败');
-      return;
+      if (e instanceof GitError && e.code === 'invalid-revision' && input.startsWith('refs/')) {
+        const choice = await vscode.window.showQuickPick(
+          ['从远端 fetch 后重试', '取消'],
+          { placeHolder: `Pentimento: 本地不存在「${input}」,是否从远端 fetch?` },
+        );
+        if (choice !== '从远端 fetch 后重试') {
+          return;
+        }
+        try {
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: `Pentimento: 正在 fetch ${input}…`,
+              cancellable: false,
+            },
+            () => this.fetchService.fetchRef(repo.root, input),
+          );
+        } catch (fe) {
+          await this.reportError(fe, 'fetch 失败');
+          return;
+        }
+        try {
+          resolved = await this.revisionResolver.resolve(input, repo.root);
+        } catch (e2) {
+          await this.reportError(e2, 'fetch 后仍无法解析');
+          return;
+        }
+      } else {
+        await this.reportError(e, '解析 Revision 失败');
+        return;
+      }
     }
 
     let base: string;
@@ -198,6 +230,49 @@ export class HighlightController implements vscode.Disposable {
     this.updateChrome();
   }
 
+  /**
+   * 受控 fetch:fetch origin 后刷新当前仓库的高亮。
+   * fetch 不切换分支、不修改工作区;完成后清缓存重 apply。
+   */
+  async fetchAndRefresh(): Promise<void> {
+    const repoRoot = await this.resolveCurrentRepoRoot();
+    if (!repoRoot) {
+      await vscode.window.showWarningMessage('Pentimento: 未找到当前仓库,请先打开一个文件。');
+      return;
+    }
+    try {
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'Pentimento: 正在 fetch origin…',
+          cancellable: false,
+        },
+        () => this.fetchService.fetchOrigin(repoRoot),
+      );
+      this.blameCache.clear();
+      this.targetCommitsCache.clear();
+      this.patchDisplayDiffCache.clear();
+      this.membership.clearAll();
+      await this.applyVisibleEditors();
+      this.updateChrome();
+      this.logger.info(`fetch 完成: ${repoRoot}`);
+    } catch (e) {
+      await this.reportError(e, 'fetch 失败');
+    }
+  }
+
+  private async resolveCurrentRepoRoot(): Promise<string | undefined> {
+    const editor = vscode.window.activeTextEditor;
+    if (editor) {
+      const repo = await this.repoResolver.resolveRepository(editor.document.uri.fsPath);
+      if (repo) {
+        return repo.root;
+      }
+    }
+    const sessions = this.sessionManager.allSessions();
+    return sessions[0]?.repositoryRoot;
+  }
+
   async removeActivePatch(): Promise<void> {
     const session = this.currentSession();
     if (!session || !session.primaryPatchId) {
@@ -207,6 +282,91 @@ export class HighlightController implements vscode.Disposable {
     this.membership.removePatch(session.primaryPatchId);
     await this.applyVisibleEditors();
     this.updateChrome();
+  }
+
+  /**
+   * 为某个 Patch 设置自定义颜色(覆盖图层默认色)。
+   * 不传 patchId 时弹出 QuickPick 选择 Patch,再选颜色预设或自定义 hex。
+   */
+  async setPatchColor(patchId?: string): Promise<void> {
+    const session = this.currentSession();
+    if (!session || session.patchLayers.size === 0) {
+      await vscode.window.showInformationMessage('Pentimento: 当前没有可设置颜色的 Patch。');
+      return;
+    }
+    let targetId = patchId;
+    if (!targetId || !session.patchLayers.has(targetId)) {
+      const items = [...session.patchLayers.values()].map((l) => ({
+        label: `${l.patch.selection.commitHash?.slice(0, 8) ?? ''} ${l.label}`.trim(),
+        description: this.viewModeLabelOf(l.viewMode),
+        patchId: l.patchId,
+      }));
+      const picked = await vscode.window.showQuickPick(items, {
+        placeHolder: 'Pentimento: 选择要设置颜色的 Patch',
+      });
+      if (!picked) {
+        return;
+      }
+      targetId = picked.patchId;
+    }
+    const layer = session.patchLayers.get(targetId);
+    if (!layer) {
+      return;
+    }
+    const clearItem: vscode.QuickPickItem = { label: '清除自定义颜色', description: '使用图层默认色' };
+    const customItem: vscode.QuickPickItem = { label: '自定义 hex…' };
+    const presetItems = PATCH_COLOR_PRESETS.map((p) => ({
+      label: p.label,
+      background: p.background,
+      border: p.border,
+    }));
+    const colorPick = await vscode.window.showQuickPick([clearItem, ...presetItems, customItem], {
+      placeHolder: `Pentimento: 为「${layer.label}」选择颜色`,
+    });
+    if (!colorPick) {
+      return;
+    }
+    let customColor: { background: string; border: string } | undefined;
+    if (colorPick === customItem) {
+      const bg = await vscode.window.showInputBox({
+        prompt: '输入背景 hex(如 #4ade8040)',
+        validateInput: (v) => (isValidHexColor(v) ? undefined : '格式应为 #RGB / #RRGGBB / #RRGGBBAA'),
+      });
+      if (!bg) {
+        return;
+      }
+      const border = await vscode.window.showInputBox({
+        prompt: '输入边框 hex(如 #4ade80ff)',
+        value: bg,
+        validateInput: (v) => (isValidHexColor(v) ? undefined : '格式应为 #RGB / #RRGGBB / #RRGGBBAA'),
+      });
+      if (!border) {
+        return;
+      }
+      customColor = { background: bg, border };
+    } else if (colorPick === clearItem) {
+      customColor = undefined;
+    } else {
+      const preset = presetItems.find((p) => p.label === colorPick.label);
+      if (!preset) {
+        return;
+      }
+      customColor = { background: preset.background, border: preset.border };
+    }
+    setLayerColor(session, targetId, customColor);
+    await this.applyVisibleEditors();
+    this.updateChrome();
+  }
+
+  private viewModeLabelOf(mode: HistoricalPatchViewMode): string {
+    switch (mode) {
+      case 'exact-patch-revision':
+        return '精确';
+      case 'surviving-lines':
+        return '存活';
+      case 'projected-footprint':
+        return '投影';
+    }
   }
 
   async showOnlyPrimary(): Promise<void> {
@@ -466,7 +626,7 @@ export class HighlightController implements vscode.Disposable {
     }
 
     const entries = this.membership.entries(uri);
-    const slotRanges = new Map<number, vscode.Range[]>();
+    const layerRanges = new Map<string, vscode.Range[]>();
     const overlap: vscode.Range[] = [];
     const modified: vscode.Range[] = [];
     const ambiguous: vscode.Range[] = [];
@@ -477,9 +637,9 @@ export class HighlightController implements vscode.Disposable {
       if (composed.style === 'single-patch') {
         const layer = session.patchLayers.get(composed.patchIds[0]);
         if (layer) {
-          const arr = slotRanges.get(layer.colorSlot) ?? [];
+          const arr = layerRanges.get(layer.patchId) ?? [];
           arr.push(range);
-          slotRanges.set(layer.colorSlot, arr);
+          layerRanges.set(layer.patchId, arr);
         }
       } else if (composed.style === 'multi-patch-overlap') {
         overlap.push(range);
@@ -490,8 +650,15 @@ export class HighlightController implements vscode.Disposable {
       }
     }
 
-    for (const [slot, ranges] of slotRanges) {
-      this.decorationManager.apply(editor, this.decorationManager.getLayerType(slot), ranges);
+    for (const [patchId, ranges] of layerRanges) {
+      const layer = session.patchLayers.get(patchId);
+      if (layer) {
+        this.decorationManager.apply(
+          editor,
+          this.decorationManager.getLayerType(layer.colorSlot, layer.customColor),
+          ranges,
+        );
+      }
     }
     if (overlap.length) {
       this.decorationManager.apply(editor, this.decorationManager.getSpecialType('overlap'), overlap);
@@ -815,6 +982,33 @@ export class HighlightController implements vscode.Disposable {
     await this.buildAndAddPatch(repo, { ...sel, viewMode: 'projected-footprint' }, false);
   }
 
+  /** 显示当前活跃 Patch 的演化摘要(模式/文件/增删行)。 */
+  async showEvolutionSummary(): Promise<void> {
+    const sessions = this.sessionManager.allSessions();
+    const items: vscode.QuickPickItem[] = [];
+    for (const s of sessions) {
+      for (const l of s.patchLayers.values()) {
+        if (!l.enabled) {
+          continue;
+        }
+        const hash = l.patch.selection.commitHash?.slice(0, 8) ?? '?';
+        items.push({
+          label: `${hash} ${l.label}`,
+          description: `${viewModeText(l.viewMode)} · ${l.patch.files.length} 文件`,
+          detail: `+${l.patch.totalAddedLines} -${l.patch.totalDeletedLines}`,
+        });
+      }
+    }
+    if (items.length === 0) {
+      await vscode.window.showInformationMessage('Pentimento: 无活跃 Patch。');
+      return;
+    }
+    await vscode.window.showQuickPick(items, {
+      placeHolder: 'Pentimento: Patch 演化摘要',
+      canPickMany: false,
+    });
+  }
+
   private async getCachedPatchDisplayDiff(
     repoRoot: string,
     patchRevision: string,
@@ -887,5 +1081,18 @@ export class HighlightController implements vscode.Disposable {
 
   dispose(): void {
     this.statusItem.dispose();
+  }
+}
+
+function viewModeText(mode: string): string {
+  switch (mode) {
+    case 'exact-patch-revision':
+      return '精确';
+    case 'surviving-lines':
+      return '存活';
+    case 'projected-footprint':
+      return '投影';
+    default:
+      return mode;
   }
 }

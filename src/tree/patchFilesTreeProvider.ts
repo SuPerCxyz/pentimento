@@ -4,7 +4,16 @@ import type { HighlightSessionManager } from '../highlight/highlightSessionManag
 import type { PatchHighlightLayer } from '../highlight/patchHighlightLayer';
 import type { PatchFileChange, AddedLineRange, HistoricalPatchViewMode } from '../patch/models';
 
-export type PatchTreeNode = PatchNode | FileNode | HunkNode;
+export type PatchTreeNode = PatchNode | FileNode | HunkNode | GroupNode;
+
+type SortBy = 'added' | 'name' | 'color';
+type GroupBy = 'none' | 'viewMode';
+
+interface LayerEntry {
+  layer: PatchHighlightLayer;
+  root: string;
+  isPrimary: boolean;
+}
 
 /** ★ 主要 / ● 启用 / ○ 隐藏。 */
 class PatchNode extends vscode.TreeItem {
@@ -19,6 +28,17 @@ class PatchNode extends vscode.TreeItem {
     this.description = `${viewModeLabel(layer.viewMode)} · ${layer.patch.totalAddedLines} 行`;
     this.tooltip = `${hash} · ${layer.label}\n${viewModeLabel(layer.viewMode)} · ${layer.patch.files.length} files · +${layer.patch.totalAddedLines}`;
     this.contextValue = isPrimary ? 'pentimento.primaryPatch' : 'pentimento.patch';
+  }
+}
+
+/** 分组节点(按 viewMode 分组时使用)。 */
+class GroupNode extends vscode.TreeItem {
+  constructor(
+    label: string,
+    public readonly children: PatchNode[],
+  ) {
+    super(label, vscode.TreeItemCollapsibleState.Expanded);
+    this.contextValue = 'pentimento.patchGroup';
   }
 }
 
@@ -48,6 +68,7 @@ class HunkNode extends vscode.TreeItem {
 /**
  * PENTIMENTO 多级树:Patch -> 文件 -> Hunk。
  * 从 HighlightSessionManager 读取会话,懒加载。
+ * 顶层支持按 sortBy 排序与按 groupBy 分组。
  */
 export class PatchFilesTreeProvider implements vscode.TreeDataProvider<PatchTreeNode> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<PatchTreeNode | undefined>();
@@ -65,13 +86,24 @@ export class PatchFilesTreeProvider implements vscode.TreeDataProvider<PatchTree
 
   getChildren(element?: PatchTreeNode): PatchTreeNode[] {
     if (!element) {
-      const nodes: PatchNode[] = [];
+      const entries: LayerEntry[] = [];
       for (const s of this.sessionManager.allSessions()) {
         for (const layer of s.patchLayers.values()) {
-          nodes.push(new PatchNode(layer, s.repositoryRoot, s.primaryPatchId === layer.patchId));
+          entries.push({
+            layer,
+            root: s.repositoryRoot,
+            isPrimary: s.primaryPatchId === layer.patchId,
+          });
         }
       }
-      return nodes;
+      sortLayerEntries(entries, this.sortBy());
+      if (this.groupBy() === 'viewMode') {
+        return groupByViewMode(entries);
+      }
+      return entries.map((e) => new PatchNode(e.layer, e.root, e.isPrimary));
+    }
+    if (element instanceof GroupNode) {
+      return element.children;
     }
     if (element instanceof PatchNode) {
       return element.layer.patch.files.map((f) => new FileNode(element.layer, f, element.repoRoot));
@@ -81,6 +113,56 @@ export class PatchFilesTreeProvider implements vscode.TreeDataProvider<PatchTree
     }
     return [];
   }
+
+  private sortBy(): SortBy {
+    return vscode.workspace.getConfiguration('pentimento').get<SortBy>('multiPatch.sortBy', 'added');
+  }
+
+  private groupBy(): GroupBy {
+    return vscode.workspace.getConfiguration('pentimento').get<GroupBy>('multiPatch.groupBy', 'none');
+  }
+}
+
+function sortLayerEntries(entries: LayerEntry[], sortBy: SortBy): void {
+  switch (sortBy) {
+    case 'name':
+      entries.sort((a, b) => a.layer.label.localeCompare(b.layer.label) || a.layer.createdAt - b.layer.createdAt);
+      break;
+    case 'color':
+      entries.sort(
+        (a, b) => a.layer.colorSlot - b.layer.colorSlot || a.layer.createdAt - b.layer.createdAt,
+      );
+      break;
+    case 'added':
+    default:
+      entries.sort((a, b) => a.layer.createdAt - b.layer.createdAt);
+      break;
+  }
+}
+
+function groupByViewMode(entries: LayerEntry[]): GroupNode[] {
+  const order: HistoricalPatchViewMode[] = [
+    'exact-patch-revision',
+    'surviving-lines',
+    'projected-footprint',
+  ];
+  const groups = new Map<HistoricalPatchViewMode, LayerEntry[]>();
+  for (const e of entries) {
+    const arr = groups.get(e.layer.viewMode) ?? [];
+    arr.push(e);
+    groups.set(e.layer.viewMode, arr);
+  }
+  const result: GroupNode[] = [];
+  for (const mode of order) {
+    const arr = groups.get(mode);
+    if (!arr || arr.length === 0) {
+      continue;
+    }
+    const label = `${viewModeLabel(mode)} (${arr.length})`;
+    const children = arr.map((e) => new PatchNode(e.layer, e.root, e.isPrimary));
+    result.push(new GroupNode(label, children));
+  }
+  return result;
 }
 
 function viewModeLabel(mode: HistoricalPatchViewMode): string {

@@ -37,6 +37,8 @@ const COMMAND_DEFS: readonly CommandDef[] = [
   [Commands.removeTemporaryWorktree, 'Remove Temporary Worktree'],
   [Commands.cleanStaleWorktrees, 'Clean Stale Temporary Worktrees'],
   [Commands.showDiagnostics, 'Show Diagnostics'],
+  [Commands.setPatchColor, 'Set Patch Color'],
+  [Commands.fetch, 'Fetch and Refresh'],
 ];
 
 /** 真实 handler:接收 controller 与命令参数。 */
@@ -61,8 +63,11 @@ const REAL_HANDLERS: Record<string, Handler> = {
   [Commands.openExactPatchRevision]: (c, ...args) =>
     c.openExactPatchRevision(args[0] ? String(args[0]) : undefined),
   [Commands.projectOntoCurrentRevision]: (c) => c.projectOntoCurrentRevision(),
+  [Commands.showEvolutionSummary]: (c) => c.showEvolutionSummary(),
   [Commands.removeTemporaryWorktree]: (c) => c.removePrimaryWorktree(),
   [Commands.cleanStaleWorktrees]: (c) => c.cleanStaleWorktrees(),
+  [Commands.setPatchColor]: (c, ...args) => c.setPatchColor(args[0] ? String(args[0]) : undefined),
+  [Commands.fetch]: (c) => c.fetchAndRefresh(),
 };
 
 /**

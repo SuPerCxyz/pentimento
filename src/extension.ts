@@ -17,6 +17,7 @@ import { HighlightController } from './highlight/highlightController';
 import { EditorTracker } from './highlight/editorTracker';
 import { WorktreeManager } from './git/worktreeManager';
 import { WorktreeMetadataStore } from './worktree/worktreeMetadataStore';
+import { FetchService } from './git/fetchService';
 
 /**
  * Pentimento 扩展入口。
@@ -83,6 +84,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const storageRoot = context.globalStorageUri.fsPath;
   const worktreeManager = new WorktreeManager(git, storageRoot);
   const metadataStore = new WorktreeMetadataStore(storageRoot);
+  const fetchService = new FetchService(git);
 
   // 树视图
   const treeProvider = new PatchFilesTreeProvider(sessionManager);
@@ -102,6 +104,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     logger,
     worktreeManager,
     metadataStore,
+    fetchService,
     storageRoot,
   );
   context.subscriptions.push(controller);
@@ -138,6 +141,39 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument((doc) => {
       hoverProvider.invalidateDocument(doc.uri);
+    }),
+  );
+
+  // 受控后台 autoFetch(可配置开关与间隔)
+  let autoFetchTimer: ReturnType<typeof setInterval> | undefined;
+  const setupAutoFetch = (): void => {
+    if (autoFetchTimer) {
+      clearInterval(autoFetchTimer);
+      autoFetchTimer = undefined;
+    }
+    const afSection = vscode.workspace.getConfiguration('pentimento.git.autoFetch');
+    const enabled = afSection.get<boolean>('enabled', false);
+    const intervalMin = afSection.get<number>('intervalMinutes', 30);
+    if (enabled && intervalMin > 0) {
+      autoFetchTimer = setInterval(() => {
+        void controller.fetchAndRefresh();
+      }, intervalMin * 60 * 1000);
+      logger.info(`autoFetch enabled: every ${intervalMin} min`);
+    }
+  };
+  setupAutoFetch();
+  context.subscriptions.push({
+    dispose: () => {
+      if (autoFetchTimer) {
+        clearInterval(autoFetchTimer);
+      }
+    },
+  });
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('pentimento.git.autoFetch')) {
+        setupAutoFetch();
+      }
     }),
   );
 

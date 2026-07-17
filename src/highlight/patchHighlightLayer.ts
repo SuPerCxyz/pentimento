@@ -10,6 +10,8 @@ export interface PatchHighlightLayer {
   displayRevision: string;
   viewMode: HistoricalPatchViewMode;
   colorSlot: number; // 0..5
+  /** 自定义颜色(覆盖 colorSlot);为 hex 字符串,如 '#4ade8040'。 */
+  customColor?: { background: string; border: string };
   label: string;
   createdAt: number;
 }

@@ -10,6 +10,7 @@ import {
   hideAll,
   clearAll,
   activeLayerCount,
+  setLayerColor,
 } from '../../src/highlight/repositoryHighlightSession';
 import type { PatchModel } from '../../src/patch/models';
 import { generatePatchId } from '../../src/highlight/patchHighlightLayer';
@@ -146,5 +147,20 @@ describe('repositoryHighlightSession', () => {
     const l2 = addPatch(s, 'repoA', makePatch('commit', 'b', 'c1')).layer!;
     expect(generatePatchId('repoA', l2.selection)).to.equal(generatePatchId('repoA', l.selection));
     expect(l2.colorSlot).to.equal(slotBefore);
+  });
+
+  it('setLayerColor sets and clears custom color', () => {
+    const s = createSession('/repo', 'HEAD');
+    const l = addPatch(s, 'repoA', makePatch('commit', 'b', 'c1')).layer!;
+    expect(l.customColor).to.be.undefined;
+    expect(setLayerColor(s, l.patchId, { background: '#4ade8040', border: '#4ade80ff' })).to.be.true;
+    expect(l.customColor).to.deep.equal({ background: '#4ade8040', border: '#4ade80ff' });
+    expect(setLayerColor(s, l.patchId, undefined)).to.be.true;
+    expect(l.customColor).to.be.undefined;
+  });
+
+  it('setLayerColor returns false for unknown patchId', () => {
+    const s = createSession('/repo', 'HEAD');
+    expect(setLayerColor(s, 'nope', { background: '#000', border: '#000' })).to.be.false;
   });
 });

@@ -15,18 +15,23 @@ export {
 export function buildDecorationRenderOptions(spec: DecorationSpec): vscode.DecorationRenderOptions {
   const opts: vscode.DecorationRenderOptions = {};
   if (spec.useBackground) {
-    opts.backgroundColor = { id: spec.background };
+    opts.backgroundColor = isThemeColorId(spec.background) ? { id: spec.background } : spec.background;
   }
   if (spec.useBorder) {
-    opts.borderColor = { id: spec.border };
+    opts.borderColor = isThemeColorId(spec.border) ? { id: spec.border } : spec.border;
     opts.border = spec.borderStyle;
   }
   if (spec.useOverviewRuler) {
-    opts.overviewRulerColor = { id: spec.border };
+    opts.overviewRulerColor = isThemeColorId(spec.border) ? { id: spec.border } : spec.border;
     opts.overviewRulerLane = vscode.OverviewRulerLane.Left;
   }
   if (spec.wholeLine) {
     opts.isWholeLine = true;
   }
   return opts;
+}
+
+/** 以 # 开头视为自定义 hex 颜色,否则视为主题颜色 id。 */
+function isThemeColorId(c: string): boolean {
+  return !c.startsWith('#');
 }

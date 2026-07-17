@@ -49,6 +49,12 @@ describe('projectedFootprintMapper', () => {
     expect(projected[0].currentStartLine).to.be.undefined;
   });
 
+  it('marks modified lines when a hunk replaces content', () => {
+    const diff = file('a.py', '@@ -1,1 +1,1 @@', '-old', '+new');
+    const projected = projectRanges(diff, [range(1, 1)]);
+    expect(projected[0].status).to.equal('modified');
+  });
+
   it('splits a range by status change', () => {
     // patch 行 1 context(unchanged),行 2 deleted
     const diff = file('a.py', '@@ -1,2 +1,1 @@', ' line1', '-line2');
