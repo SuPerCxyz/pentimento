@@ -1,0 +1,212 @@
+{
+  "name": "pentimento",
+  "displayName": "Pentimento",
+  "description": "Reveal Git patch additions directly within the living codebase.",
+  "version": "0.0.1",
+  "publisher": "pentimento-contributors",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "SCM Providers",
+    "Visualization"
+  ],
+  "keywords": [
+    "git",
+    "diff",
+    "patch",
+    "blame",
+    "highlight",
+    "history",
+    "commit"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      { "command": "pentimento.addCommitFromLine", "title": "Pentimento: Add Commit From Current Line" },
+      { "command": "pentimento.highlightOnlyCommitFromLine", "title": "Pentimento: Highlight Only Commit From Current Line" },
+      { "command": "pentimento.toggleCommitFromLine", "title": "Pentimento: Toggle Commit From Current Line" },
+      { "command": "pentimento.addRef", "title": "Pentimento: Add Commit or Range" },
+      { "command": "pentimento.highlightWorkingTree", "title": "Pentimento: Highlight Working Tree Changes" },
+      { "command": "pentimento.highlightStaged", "title": "Pentimento: Highlight Staged Changes" },
+      { "command": "pentimento.highlightSurvivingLines", "title": "Pentimento: Highlight Surviving Lines in Current Revision" },
+      { "command": "pentimento.openExactPatchRevision", "title": "Pentimento: Open Exact Patch Revision" },
+      { "command": "pentimento.projectOntoCurrentRevision", "title": "Pentimento: Project Patch onto Current Revision" },
+      { "command": "pentimento.setPrimaryPatch", "title": "Pentimento: Set Primary Patch" },
+      { "command": "pentimento.togglePatchVisibility", "title": "Pentimento: Show or Hide Patch" },
+      { "command": "pentimento.removePatch", "title": "Pentimento: Remove Patch" },
+      { "command": "pentimento.managePatches", "title": "Pentimento: Manage Highlighted Patches" },
+      { "command": "pentimento.highlightCurrentFile", "title": "Pentimento: Highlight Current File Only" },
+      { "command": "pentimento.highlightAllFiles", "title": "Pentimento: Highlight All Changed Files" },
+      { "command": "pentimento.showFiles", "title": "Pentimento: Show Changed Files" },
+      { "command": "pentimento.nextHunk", "title": "Pentimento: Next Added Hunk" },
+      { "command": "pentimento.previousHunk", "title": "Pentimento: Previous Added Hunk" },
+      { "command": "pentimento.showOnlyPrimary", "title": "Pentimento: Show Only Primary Patch" },
+      { "command": "pentimento.showAll", "title": "Pentimento: Show All Patches" },
+      { "command": "pentimento.hideAll", "title": "Pentimento: Hide All Patches" },
+      { "command": "pentimento.toggle", "title": "Pentimento: Toggle Highlight" },
+      { "command": "pentimento.refresh", "title": "Pentimento: Refresh Highlight" },
+      { "command": "pentimento.clearAll", "title": "Pentimento: Clear All Patches" },
+      { "command": "pentimento.switchHistoricalViewMode", "title": "Pentimento: Switch Historical View Mode" },
+      { "command": "pentimento.showEvolutionSummary", "title": "Pentimento: Show Patch Evolution Summary" },
+      { "command": "pentimento.closeExactWorkspace", "title": "Pentimento: Close Exact Patch Workspace" },
+      { "command": "pentimento.removeTemporaryWorktree", "title": "Pentimento: Remove Temporary Worktree" },
+      { "command": "pentimento.cleanStaleWorktrees", "title": "Pentimento: Clean Stale Temporary Worktrees" },
+      { "command": "pentimento.openOutputLog", "title": "Pentimento: Open Output Log" },
+      { "command": "pentimento.showDiagnostics", "title": "Pentimento: Show Diagnostics" }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "pentimento",
+          "title": "PENTIMENTO",
+          "icon": "resources/pentimento.svg"
+        }
+      ]
+    },
+    "views": {
+      "pentimento": [
+        {
+          "id": "pentimento.patches",
+          "name": "Patches"
+        }
+      ]
+    },
+    "menus": {
+      "commandPalette": [
+        { "command": "pentimento.addCommitFromLine", "when": "pentimento.enabled" },
+        { "command": "pentimento.highlightOnlyCommitFromLine", "when": "pentimento.enabled" },
+        { "command": "pentimento.toggleCommitFromLine", "when": "pentimento.enabled" },
+        { "command": "pentimento.addRef", "when": "pentimento.enabled" },
+        { "command": "pentimento.highlightWorkingTree", "when": "pentimento.enabled" },
+        { "command": "pentimento.highlightStaged", "when": "pentimento.enabled" },
+        { "command": "pentimento.highlightSurvivingLines", "when": "pentimento.enabled" },
+        { "command": "pentimento.openExactPatchRevision", "when": "pentimento.enabled" },
+        { "command": "pentimento.projectOntoCurrentRevision", "when": "pentimento.enabled" },
+        { "command": "pentimento.setPrimaryPatch", "when": "pentimento.hasActivePatches" },
+        { "command": "pentimento.togglePatchVisibility", "when": "pentimento.hasActivePatches" },
+        { "command": "pentimento.removePatch", "when": "pentimento.hasActivePatches" },
+        { "command": "pentimento.managePatches", "when": "pentimento.enabled" },
+        { "command": "pentimento.highlightCurrentFile", "when": "pentimento.enabled" },
+        { "command": "pentimento.highlightAllFiles", "when": "pentimento.enabled" },
+        { "command": "pentimento.showFiles", "when": "pentimento.hasActivePatches" },
+        { "command": "pentimento.nextHunk", "when": "pentimento.hasActivePatches" },
+        { "command": "pentimento.previousHunk", "when": "pentimento.hasActivePatches" },
+        { "command": "pentimento.showOnlyPrimary", "when": "pentimento.hasActivePatches" },
+        { "command": "pentimento.showAll", "when": "pentimento.hasActivePatches" },
+        { "command": "pentimento.hideAll", "when": "pentimento.hasActivePatches" },
+        { "command": "pentimento.toggle", "when": "pentimento.enabled" },
+        { "command": "pentimento.refresh", "when": "pentimento.enabled" },
+        { "command": "pentimento.clearAll", "when": "pentimento.hasActivePatches" },
+        { "command": "pentimento.switchHistoricalViewMode", "when": "pentimento.hasActivePatches" },
+        { "command": "pentimento.showEvolutionSummary", "when": "pentimento.hasActivePatches" },
+        { "command": "pentimento.closeExactWorkspace", "when": "pentimento.exactWorkspace" },
+        { "command": "pentimento.removeTemporaryWorktree", "when": "pentimento.enabled" },
+        { "command": "pentimento.cleanStaleWorktrees", "when": "pentimento.enabled" },
+        { "command": "pentimento.openOutputLog", "when": "true" },
+        { "command": "pentimento.showDiagnostics", "when": "true" }
+      ],
+      "view/title": [
+        {
+          "command": "pentimento.addRef",
+          "when": "view == pentimento.patches",
+          "group": "navigation@1"
+        },
+        {
+          "command": "pentimento.refresh",
+          "when": "view == pentimento.patches",
+          "group": "navigation@2"
+        },
+        {
+          "command": "pentimento.clearAll",
+          "when": "view == pentimento.patches && pentimento.hasActivePatches",
+          "group": "navigation@3"
+        }
+      ]
+    },
+    "colors": [
+      { "id": "pentimento.patchLayer1Background", "description": "Patch layer 1 (green) line background.", "defaults": { "light": "#22c55e1a", "dark": "#22c55e26", "highContrast": "#22c55e55" } },
+      { "id": "pentimento.patchLayer1Border", "description": "Patch layer 1 left border.", "defaults": { "light": "#22c55e66", "dark": "#22c55e88", "highContrast": "#22c55eff" } },
+      { "id": "pentimento.patchLayer2Background", "description": "Patch layer 2 (cyan) line background.", "defaults": { "light": "#06b6d41a", "dark": "#06b6d426", "highContrast": "#06b6d455" } },
+      { "id": "pentimento.patchLayer2Border", "description": "Patch layer 2 left border.", "defaults": { "light": "#06b6d466", "dark": "#06b6d488", "highContrast": "#06b6d4ff" } },
+      { "id": "pentimento.patchLayer3Background", "description": "Patch layer 3 (blue) line background.", "defaults": { "light": "#3b82f61a", "dark": "#3b82f626", "highContrast": "#3b82f655" } },
+      { "id": "pentimento.patchLayer3Border", "description": "Patch layer 3 left border.", "defaults": { "light": "#3b82f666", "dark": "#3b82f688", "highContrast": "#3b82f6ff" } },
+      { "id": "pentimento.patchLayer4Background", "description": "Patch layer 4 (violet) line background.", "defaults": { "light": "#8b5cf61a", "dark": "#8b5cf626", "highContrast": "#8b5cf655" } },
+      { "id": "pentimento.patchLayer4Border", "description": "Patch layer 4 left border.", "defaults": { "light": "#8b5cf666", "dark": "#8b5cf688", "highContrast": "#8b5cf6ff" } },
+      { "id": "pentimento.patchLayer5Background", "description": "Patch layer 5 (pink) line background.", "defaults": { "light": "#ec48991a", "dark": "#ec489926", "highContrast": "#ec489955" } },
+      { "id": "pentimento.patchLayer5Border", "description": "Patch layer 5 left border.", "defaults": { "light": "#ec489966", "dark": "#ec489988", "highContrast": "#ec4899ff" } },
+      { "id": "pentimento.patchLayer6Background", "description": "Patch layer 6 (amber) line background.", "defaults": { "light": "#f59e0b1a", "dark": "#f59e0b26", "highContrast": "#f59e0b55" } },
+      { "id": "pentimento.patchLayer6Border", "description": "Patch layer 6 left border.", "defaults": { "light": "#f59e0b66", "dark": "#f59e0b88", "highContrast": "#f59e0bff" } },
+      { "id": "pentimento.overlapBackground", "description": "Background for lines touched by multiple patches.", "defaults": { "light": "#ef44441a", "dark": "#ef444426", "highContrast": "#ef444455" } },
+      { "id": "pentimento.overlapBorder", "description": "Left border for multi-patch overlap lines.", "defaults": { "light": "#ef444466", "dark": "#ef444488", "highContrast": "#ef4444ff" } },
+      { "id": "pentimento.modifiedBackground", "description": "Background for lines later modified by another patch.", "defaults": { "light": "#eab3081a", "dark": "#eab30826", "highContrast": "#eab30855" } },
+      { "id": "pentimento.modifiedBorder", "description": "Left border for later-modified lines.", "defaults": { "light": "#eab30866", "dark": "#eab30888", "highContrast": "#eab308ff" } },
+      { "id": "pentimento.ambiguousBackground", "description": "Background for lines whose attribution is uncertain.", "defaults": { "light": "#6b72801a", "dark": "#9ca3af26", "highContrast": "#9ca3af55" } },
+      { "id": "pentimento.ambiguousBorder", "description": "Left border for ambiguous lines.", "defaults": { "light": "#6b728066", "dark": "#9ca3af88", "highContrast": "#9ca3afff" } }
+    ],
+    "configuration": {
+      "title": "Pentimento",
+      "properties": {
+        "pentimento.hover.enabled": { "type": "boolean", "default": true, "markdownDescription": "Enable the Pentimento line Git hover." },
+        "pentimento.hover.delay": { "type": "number", "default": 300, "markdownDescription": "Hover debounce delay in milliseconds.", "minimum": 0 },
+        "pentimento.hover.mode": { "type": "string", "enum": ["compact", "full", "disabled"], "default": "compact", "enumDescriptions": ["Compact hover", "Full hover with all details", "Disabled"], "markdownDescription": "Hover detail level." },
+        "pentimento.compatibility.mode": { "type": "boolean", "default": true, "markdownDescription": "Compatibility mode: no line-end text, no CodeLens, no InlayHint, no gutter icon." },
+        "pentimento.highlight.style": { "type": "string", "enum": ["background-and-border", "background-only", "border-only", "overview-ruler-only"], "default": "background-and-border", "enumDescriptions": ["Background and left border", "Background only", "Border only", "Overview ruler only"], "markdownDescription": "Visual style of patch highlight." },
+        "pentimento.highlight.wholeLine": { "type": "boolean", "default": true, "markdownDescription": "Highlight the whole line." },
+        "pentimento.highlight.gutterIcon": { "type": "boolean", "default": false, "markdownDescription": "Show a gutter icon (off by default to avoid conflicts)." },
+        "pentimento.highlight.inlineLabel": { "type": "boolean", "default": false, "markdownDescription": "Show an inline line-end label (off by default)." },
+        "pentimento.highlight.overviewRuler": { "type": "boolean", "default": true, "markdownDescription": "Show marks in the overview ruler." },
+        "pentimento.highlight.currentFileOnlyByDefault": { "type": "boolean", "default": false, "markdownDescription": "Highlight only the current file by default." },
+        "pentimento.blame.ignoreWhitespace": { "type": "boolean", "default": false, "markdownDescription": "Pass -w to git blame." },
+        "pentimento.blame.detectMovedLines": { "type": "boolean", "default": true, "markdownDescription": "Use -M to detect moved lines." },
+        "pentimento.blame.detectCopiedLines": { "type": "boolean", "default": true, "markdownDescription": "Use -C to detect copied lines." },
+        "pentimento.multiPatch.enabled": { "type": "boolean", "default": true, "markdownDescription": "Allow multiple patch layers at once." },
+        "pentimento.multiPatch.maxActivePatches": { "type": "number", "default": 6, "minimum": 1, "maximum": 12, "markdownDescription": "Maximum simultaneously active patches." },
+        "pentimento.multiPatch.hoverDefaultAction": { "type": "string", "enum": ["add", "replace", "ask"], "default": "add", "enumDescriptions": ["Add to existing layers", "Replace all layers", "Ask each time"], "markdownDescription": "Default hover action when adding a patch." },
+        "pentimento.multiPatch.overlapStyle": { "type": "string", "enum": ["combined"], "default": "combined", "markdownDescription": "Visual style for overlapping patch lines." },
+        "pentimento.historical.defaultMode": { "type": "string", "enum": ["ask", "surviving-lines", "exact-patch-revision"], "default": "ask", "enumDescriptions": ["Ask each time", "Surviving lines", "Exact patch revision"], "markdownDescription": "Default mode for historical patches." },
+        "pentimento.historical.preferExactWorktreeForNonAncestor": { "type": "boolean", "default": true, "markdownDescription": "Prefer exact worktree for non-ancestor commits." },
+        "pentimento.exactPatch.reuseWorktree": { "type": "boolean", "default": true, "markdownDescription": "Reuse existing exact-patch worktrees." },
+        "pentimento.exactPatch.cleanupOnExit": { "type": "boolean", "default": false, "markdownDescription": "Remove all managed worktrees on extension deactivation." },
+        "pentimento.largePatch.maxFiles": { "type": "number", "default": 500, "minimum": 1, "markdownDescription": "Max files analyzed per patch before truncation." },
+        "pentimento.largePatch.maxAddedLines": { "type": "number", "default": 20000, "minimum": 1, "markdownDescription": "Max added lines analyzed per patch before truncation." },
+        "pentimento.git.timeout": { "type": "number", "default": 30000, "minimum": 1000, "markdownDescription": "Git command timeout in milliseconds." },
+        "pentimento.git.maxConcurrentCommands": { "type": "number", "default": 4, "minimum": 1, "maximum": 32, "markdownDescription": "Max concurrent git commands." },
+        "pentimento.git.maxOutputBytes": { "type": "number", "default": 52428800, "minimum": 1024, "markdownDescription": "Max git command output in bytes." },
+        "pentimento.logging.level": { "type": "string", "enum": ["error", "warn", "info", "debug", "trace"], "default": "info", "markdownDescription": "Output channel log level." }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap --watch",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "compile-tests": "tsc -p tsconfig.test.json",
+    "lint": "eslint src test",
+    "test:unit": "npm run compile-tests && mocha",
+    "pretest": "npm run compile && npm run compile-tests",
+    "test": "node ./out-test/test/runTest.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/chai": "^4.3.16",
+    "@types/mocha": "^10.0.7",
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.2.0",
+    "chai": "^4.4.1",
+    "esbuild": "^0.23.0",
+    "eslint": "^9.8.0",
+    "mocha": "^10.7.0",
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.0.0"
+  }
+}

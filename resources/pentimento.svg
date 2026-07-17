@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <!-- Pentimento: layered brush strokes (history visible beneath later edits) -->
+  <path d="M4 6h11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <path d="M6 12h13" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.66"/>
+  <path d="M8 18h9" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+</svg>

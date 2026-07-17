@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+out-test/
+
+# Packaging
+*.vsix
+
+# Test artifacts
+.vscode-test/
+coverage/
+test-results/
+
+# OS / Editor noise
+.DS_Store
+Thumbs.db
+*.log
+*.map
+
+# Local environment
+.env
+.env.*
+!.env.example

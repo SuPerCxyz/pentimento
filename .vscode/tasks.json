@@ -1,0 +1,45 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "npm",
+      "script": "watch",
+      "isBackground": true,
+      "problemMatcher": "$esbuild-watch",
+      "label": "npm: watch",
+      "group": "build"
+    },
+    {
+      "type": "npm",
+      "script": "compile",
+      "problemMatcher": ["$tsc"],
+      "label": "npm: compile",
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "type": "npm",
+      "script": "check",
+      "problemMatcher": ["$tsc"],
+      "label": "npm: check"
+    },
+    {
+      "type": "npm",
+      "script": "lint",
+      "problemMatcher": ["$eslint-stylish"],
+      "label": "npm: lint"
+    },
+    {
+      "type": "npm",
+      "script": "pretest",
+      "problemMatcher": [],
+      "label": "npm: pretest"
+    },
+    {
+      "type": "npm",
+      "script": "test:unit",
+      "problemMatcher": [],
+      "label": "npm: test:unit",
+      "group": { "kind": "test", "isDefault": true }
+    }
+  ]
+}
