@@ -10,6 +10,8 @@ import type { BlameLine } from '../git/blameParser';
 import { PatchService } from '../patch/patchService';
 import type { PatchSelection } from '../patch/models';
 import { findSurvivingRanges } from '../patch/survivingLineMapper';
+import { projectRanges } from '../patch/projectedFootprintMapper';
+import type { PatchLineMembership } from './lineMembershipIndex';
 import { WorktreeManager, type ExactPatchWorkspace, worktreePathFor } from '../git/worktreeManager';
 import type { WorktreeMetadataStore } from '../worktree/worktreeMetadataStore';
 import { openExactWorkspace } from '../ui/exactWorkspaceLauncher';
@@ -44,6 +46,7 @@ export class HighlightController implements vscode.Disposable {
   private readonly statusItem: vscode.StatusBarItem;
   private readonly blameCache = new Map<string, BlameLine[]>();
   private readonly targetCommitsCache = new Map<string, Set<string>>();
+  private readonly patchDisplayDiffCache = new Map<string, string>();
   private blameOpts: BlameOptions = {
     ignoreWhitespace: false,
     detectMovedLines: true,
@@ -421,6 +424,44 @@ export class HighlightController implements vscode.Disposable {
         } catch {
           // blame 失败(二进制等)跳过
         }
+      } else if (layer.viewMode === 'projected-footprint') {
+        if (doc.isDirty) {
+          continue;
+        }
+        const patchRev = layer.patch.selection.patchRevision;
+        if (!patchRev) {
+          continue;
+        }
+        const filePath = file.newPath ?? file.oldPath;
+        if (!filePath) {
+          continue;
+        }
+        try {
+          const diff = await this.getCachedPatchDisplayDiff(repo.root, patchRev, session.displayRevision, filePath);
+          const projected = projectRanges(diff, file.originalAddedRanges);
+          for (const p of projected) {
+            if (p.status === 'deleted' || p.currentStartLine === undefined || p.currentEndLine === undefined) {
+              continue;
+            }
+            const mstatus: PatchLineMembership['status'] =
+              p.status === 'modified'
+                ? 'modified'
+                : p.status === 'moved'
+                  ? 'moved'
+                  : p.status === 'ambiguous'
+                    ? 'ambiguous'
+                    : 'surviving';
+            this.membership.applyRanges(
+              uri,
+              layer.patchId,
+              [{ startLine: p.currentStartLine, endLine: p.currentEndLine }],
+              mstatus,
+              p.confidence,
+            );
+          }
+        } catch {
+          // 投影失败跳过
+        }
       }
     }
 
@@ -725,6 +766,70 @@ export class HighlightController implements vscode.Disposable {
       return undefined;
     }
     return choice.value;
+  }
+
+  /** 把当前主要 Patch 以投影模式重新映射到当前版本。 */
+  async projectOntoCurrentRevision(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      await vscode.window.showWarningMessage('Pentimento: 请先打开一个文件以确定仓库。');
+      return;
+    }
+    const repo = await this.repoResolver.resolveRepository(editor.document.uri.fsPath);
+    if (!repo) {
+      return;
+    }
+    const session = this.sessionManager.getSession(repo.root);
+    if (!session?.primaryPatchId) {
+      await vscode.window.showInformationMessage('Pentimento: 无主要 Patch 可投影。');
+      return;
+    }
+    const layer = session.patchLayers.get(session.primaryPatchId);
+    if (!layer) {
+      return;
+    }
+    const sel = layer.patch.selection;
+    if ((sel.type !== 'commit' && sel.type !== 'range') || !sel.patchRevision) {
+      await vscode.window.showInformationMessage('Pentimento: 仅 Commit/Range 支持投影。');
+      return;
+    }
+    if (sel.patchRevision === session.displayRevision) {
+      await vscode.window.showInformationMessage('Pentimento: 当前 HEAD Patch 无需投影。');
+      return;
+    }
+    removePatch(session, session.primaryPatchId);
+    this.membership.removePatch(session.primaryPatchId);
+    await this.buildAndAddPatch(repo, { ...sel, viewMode: 'projected-footprint' }, false);
+  }
+
+  private async getCachedPatchDisplayDiff(
+    repoRoot: string,
+    patchRevision: string,
+    displayRevision: string,
+    filePath: string,
+  ): Promise<string> {
+    const key = `${repoRoot}::${patchRevision}::${displayRevision}::${filePath}`;
+    const cached = this.patchDisplayDiffCache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const out = await this.git.runText(
+      [
+        'diff',
+        '--unified=0',
+        '--no-color',
+        '--diff-algorithm=histogram',
+        '--find-renames=50%',
+        '--find-copies=50%',
+        patchRevision,
+        displayRevision,
+        '--',
+        filePath,
+      ],
+      { repositoryRoot: repoRoot },
+    );
+    this.patchDisplayDiffCache.set(key, out);
+    return out;
   }
 
   private updateChrome(): void {

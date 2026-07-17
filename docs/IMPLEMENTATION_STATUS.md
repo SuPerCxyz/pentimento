@@ -83,7 +83,7 @@ PatchFilesTreeProvider 多级树(Patch ★/●/○ -> 文件 M/A/D/R -> Hunk,点
 
 | 模块 | 优先级 | 状态 |
 |---|---|---|
-| 投影模式(后续修改黄标) | P1 | 未开始 |
+| 投影模式(projected-footprint) | P1 | 已完成 | unchanged/moved/deleted + 偏移推断;modified 内容相似度精细化待续 |
 | Commit Range 完整 / 任意本地 Ref 输入 | P1 | 已完成(Range/Ref 支持,投影除外) |
 | 文件复制追踪 / 跨文件移动 / pathEvolution | P1 | 未开始 |
 | 自定义颜色 / 排序 / 分组 | P1 | 未开始 |
