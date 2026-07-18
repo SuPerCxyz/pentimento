@@ -1,18 +1,35 @@
 import * as vscode from 'vscode';
 import type { CommitProvider, GitCommitInfo } from '../git/commitProvider';
 import type { RepositoryResolver, Repository } from '../git/repositoryResolver';
+import type { HighlightSessionManager } from '../highlight/highlightSessionManager';
+import type { PatchHighlightLayer } from '../highlight/patchHighlightLayer';
+import { PATCH_COLOR_PRESETS } from '../constants';
 
-/** 提交列表节点:点击即高亮该提交的新增代码。 */
+/**
+ * 提交列表节点:点击切换高亮/不高亮。
+ * 已高亮的提交显示色块图标(颜色与代码行高亮一致),并标注「高亮中/已隐藏」。
+ */
 export class CommitNode extends vscode.TreeItem {
-  constructor(public readonly info: GitCommitInfo) {
+  constructor(info: GitCommitInfo, layer?: PatchHighlightLayer) {
     super(`${info.shortHash} ${info.summary}`, vscode.TreeItemCollapsibleState.None);
     const date = new Date(info.authorTimestamp * 1000);
-    this.description = `${info.authorName} · ${date.toLocaleDateString()}`;
     this.tooltip = `${info.commitHash}\n${info.summary}\n${info.authorName} <${info.authorEmail ?? ''}>\n${date.toLocaleString()}`;
     this.contextValue = 'pentimento.commit';
+    if (layer) {
+      // 色块图标:颜色与代码行高亮一致(customColor 优先,否则 colorSlot 预设)
+      const opacity = layer.enabled ? 1 : 0.35;
+      const colorHex =
+        layer.customColor?.border ??
+        PATCH_COLOR_PRESETS[layer.colorSlot % PATCH_COLOR_PRESETS.length].border;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><circle cx="8" cy="8" r="6" fill="${colorHex}" opacity="${opacity}"/></svg>`;
+      this.iconPath = vscode.Uri.parse(`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`);
+      this.description = layer.enabled ? '高亮中' : '已隐藏';
+    } else {
+      this.description = `${info.authorName} · ${date.toLocaleDateString()}`;
+    }
     this.command = {
-      command: 'pentimento.addCommitFromLine',
-      title: '高亮此提交',
+      command: 'pentimento.toggleCommitHighlight',
+      title: '切换高亮',
       arguments: [info.commitHash],
     };
   }
@@ -20,7 +37,7 @@ export class CommitNode extends vscode.TreeItem {
 
 /**
  * 提交列表 TreeView:列出当前仓库的提交历史(HEAD 历史,最多 200 条)。
- * 点击提交节点即触发高亮该提交新增代码。
+ * 点击提交节点切换高亮:未高亮则添加,已高亮则切换显隐。
  */
 export class CommitListTreeProvider implements vscode.TreeDataProvider<CommitNode> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<CommitNode | undefined>();
@@ -29,6 +46,7 @@ export class CommitListTreeProvider implements vscode.TreeDataProvider<CommitNod
   constructor(
     private readonly commitProvider: CommitProvider,
     private readonly repoResolver: RepositoryResolver,
+    private readonly sessionManager: HighlightSessionManager,
   ) {}
 
   refresh(): void {
@@ -47,12 +65,19 @@ export class CommitListTreeProvider implements vscode.TreeDataProvider<CommitNod
     if (!repo) {
       return [];
     }
+    const session = this.sessionManager.getSession(repo.root);
+    let commits: GitCommitInfo[];
     try {
-      const commits = await this.commitProvider.listCommits(repo.root);
-      return commits.map((c) => new CommitNode(c));
+      commits = await this.commitProvider.listCommits(repo.root);
     } catch {
       return [];
     }
+    return commits.map((c) => {
+      const layer = session
+        ? [...session.patchLayers.values()].find((l) => l.patch.selection.commitHash === c.commitHash)
+        : undefined;
+      return new CommitNode(c, layer);
+    });
   }
 
   private async resolveRepo(): Promise<Repository | undefined> {

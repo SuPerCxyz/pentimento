@@ -59,6 +59,7 @@ export const Commands = {
   refreshCommits: 'pentimento.refreshCommits',
   highlightLineCommit: 'pentimento.highlightLineCommit',
   revealHunk: 'pentimento.revealHunk',
+  toggleCommitHighlight: 'pentimento.toggleCommitHighlight',
   fetch: 'pentimento.fetch',
   clearAll: 'pentimento.clearAll',
   switchHistoricalViewMode: 'pentimento.switchHistoricalViewMode',

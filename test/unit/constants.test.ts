@@ -30,8 +30,8 @@ describe('constants contract', () => {
     }
   });
 
-  it('registers exactly 36 commands', () => {
-    expect(Object.keys(Commands)).to.have.lengthOf(36);
+  it('registers exactly 37 commands', () => {
+    expect(Object.keys(Commands)).to.have.lengthOf(37);
   });
 
   it('provides 6 patch color layers plus overlap/modified/ambiguous', () => {

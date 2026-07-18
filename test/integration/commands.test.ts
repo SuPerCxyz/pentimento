@@ -120,4 +120,11 @@ suite('Pentimento commands (real git repo)', () => {
     await openFile('a.txt');
     await vscode.commands.executeCommand('pentimento.refreshCommits');
   });
+
+  test('toggle commit highlight adds then toggles off', async () => {
+    await openFile('a.txt');
+    await vscode.commands.executeCommand('pentimento.toggleCommitHighlight', head);
+    await vscode.commands.executeCommand('pentimento.toggleCommitHighlight', head);
+    await vscode.commands.executeCommand('pentimento.clearAll');
+  });
 });

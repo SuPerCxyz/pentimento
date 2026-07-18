@@ -95,7 +95,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const treeProvider = new PatchFilesTreeProvider(sessionManager);
   context.subscriptions.push(vscode.window.registerTreeDataProvider(VIEW_ID, treeProvider));
 
-  const commitListProvider = new CommitListTreeProvider(commitProvider, repoResolver);
+  const commitListProvider = new CommitListTreeProvider(commitProvider, repoResolver, sessionManager);
   context.subscriptions.push(vscode.window.registerTreeDataProvider(VIEW_COMMITS_ID, commitListProvider));
   context.subscriptions.push(
     vscode.commands.registerCommand(Commands.refreshCommits, () => commitListProvider.refresh()),

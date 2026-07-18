@@ -434,6 +434,28 @@ export class HighlightController implements vscode.Disposable {
     editor.selection = new vscode.Selection(start, 0, start, 0);
   }
 
+  /**
+   * 切换某提交的高亮:未高亮则添加,已高亮则切换显隐。
+   * 提交列表点击调用;变更后刷新提交列表以更新色块/状态。
+   */
+  async toggleCommitHighlight(commitHash: string): Promise<void> {
+    const session = this.currentSession();
+    if (session) {
+      const layer = [...session.patchLayers.values()].find(
+        (l) => l.patch.selection.commitHash === commitHash,
+      );
+      if (layer) {
+        setLayerEnabled(session, layer.patchId, !layer.enabled);
+        await this.applyVisibleEditors();
+        this.updateChrome();
+        await vscode.commands.executeCommand('pentimento.refreshCommits');
+        return;
+      }
+    }
+    await this.addCommitFromHash(commitHash, false);
+    await vscode.commands.executeCommand('pentimento.refreshCommits');
+  }
+
   private viewModeLabelOf(mode: HistoricalPatchViewMode): string {
     switch (mode) {
       case 'exact-patch-revision':
