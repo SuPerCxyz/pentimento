@@ -94,6 +94,9 @@ export class PatchFilesTreeProvider implements vscode.TreeDataProvider<PatchTree
       const entries: LayerEntry[] = [];
       for (const s of this.sessionManager.allSessions()) {
         for (const layer of s.patchLayers.values()) {
+          if (!layer.enabled) {
+            continue; // 隐藏的 patch 不显示在补丁图层
+          }
           entries.push({
             layer,
             root: s.repositoryRoot,
@@ -132,16 +135,17 @@ export class PatchFilesTreeProvider implements vscode.TreeDataProvider<PatchTree
 function sortLayerEntries(entries: LayerEntry[], sortBy: SortBy): void {
   switch (sortBy) {
     case 'name':
-      entries.sort((a, b) => a.layer.label.localeCompare(b.layer.label) || a.layer.createdAt - b.layer.createdAt);
+      entries.sort((a, b) => a.layer.label.localeCompare(b.layer.label) || b.layer.createdAt - a.layer.createdAt);
       break;
     case 'color':
       entries.sort(
-        (a, b) => a.layer.colorSlot - b.layer.colorSlot || a.layer.createdAt - b.layer.createdAt,
+        (a, b) => a.layer.colorSlot - b.layer.colorSlot || b.layer.createdAt - a.layer.createdAt,
       );
       break;
     case 'added':
     default:
-      entries.sort((a, b) => a.layer.createdAt - b.layer.createdAt);
+      // 新添加的靠前(降序),与提交列表「后选的更新 patch 在上」一致
+      entries.sort((a, b) => b.layer.createdAt - a.layer.createdAt);
       break;
   }
 }

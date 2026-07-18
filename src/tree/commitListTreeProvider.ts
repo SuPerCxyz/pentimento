@@ -25,6 +25,9 @@ export class CommitNode extends vscode.TreeItem {
       this.iconPath = vscode.Uri.parse(`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`);
       this.description = layer.enabled ? '高亮中' : '已隐藏';
     } else {
+      // 未高亮:空圈图标,与已高亮色块形成明显对比
+      const emptySvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><circle cx="8" cy="8" r="6" fill="none" stroke="#888888" stroke-width="1.5"/></svg>`;
+      this.iconPath = vscode.Uri.parse(`data:image/svg+xml;utf8,${encodeURIComponent(emptySvg)}`);
       this.description = `${info.authorName} · ${date.toLocaleDateString()}`;
     }
     this.command = {

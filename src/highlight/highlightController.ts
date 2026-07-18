@@ -448,15 +448,20 @@ export class HighlightController implements vscode.Disposable {
         (l) => l.patch.selection.commitHash === commitHash,
       );
       if (layer) {
-        setLayerEnabled(session, layer.patchId, !layer.enabled);
+        const nowEnabled = !layer.enabled;
+        setLayerEnabled(session, layer.patchId, nowEnabled);
         await this.applyVisibleEditors();
         this.updateChrome();
         await vscode.commands.executeCommand('pentimento.refreshCommits');
+        await vscode.window.showInformationMessage(
+          `Pentimento:${nowEnabled ? '已显示' : '已隐藏'} ${commitHash.slice(0, 8)}`,
+        );
         return;
       }
     }
     await this.addCommitFromHash(commitHash, false);
     await vscode.commands.executeCommand('pentimento.refreshCommits');
+    await vscode.window.showInformationMessage(`Pentimento: 已高亮 ${commitHash.slice(0, 8)}`);
   }
 
   private viewModeLabelOf(mode: HistoricalPatchViewMode): string {
