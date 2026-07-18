@@ -429,7 +429,19 @@ export class HighlightController implements vscode.Disposable {
   /** 打开文件并跳转到指定行范围(Hunk 点击)。 */
   async revealHunk(file: string, startLine: number, endLine: number): Promise<void> {
     const uri = vscode.Uri.file(file);
-    const doc = await vscode.workspace.openTextDocument(uri);
+    let doc: vscode.TextDocument;
+    try {
+      doc = await vscode.workspace.openTextDocument(uri);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const hint = /UNC|allowedUNCHosts/i.test(msg)
+        ? '请在设置 security.allowedUNCHosts 添加该 UNC 主机。'
+        : '';
+      await vscode.window.showErrorMessage(
+        `Pentimento: 无法打开文件 ${file}:${msg}${hint ? '\n' + hint : ''}`,
+      );
+      return;
+    }
     const editor = await vscode.window.showTextDocument(doc);
     const start = Math.max(0, startLine - 1);
     const end = Math.max(0, endLine - 1);
