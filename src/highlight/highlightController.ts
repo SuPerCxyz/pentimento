@@ -97,7 +97,7 @@ export class HighlightController implements vscode.Disposable {
     };
   }
 
-  async addCommitFromHash(commitHash: string, replace = false): Promise<void> {
+  async addCommitFromHash(commitHash: string, replace = false, forceViewMode?: 'surviving-lines' | 'projected-footprint'): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
       await vscode.window.showWarningMessage('Pentimento: 请先打开一个文件以确定仓库。');
@@ -130,7 +130,7 @@ export class HighlightController implements vscode.Disposable {
       // 降级使用短哈希
     }
 
-    await this.resolveAndAdd(repo, editor, full, parent, head, summary, replace);
+    await this.resolveAndAdd(repo, editor, full, parent, head, summary, replace, forceViewMode);
   }
 
   async addRef(): Promise<void> {
@@ -407,8 +407,9 @@ export class HighlightController implements vscode.Disposable {
       return;
     }
     const modes = [
+      { label: '投影到当前版本(精准行号,保留当前修改)', value: 'projected' },
       { label: '仅高亮存活行(当前版本仍存活)', value: 'surviving' },
-      { label: '切换到提交时 Patch(精确新增,打开工作区)', value: 'exact' },
+      { label: '切换到提交时 Patch(精确新增,打开工作区,原修改保留)', value: 'exact' },
     ];
     const pick = await vscode.window.showQuickPick(modes, {
       placeHolder: `Pentimento: 选择「${commitHash.slice(0, 8)}」的高亮方式`,
@@ -416,7 +417,9 @@ export class HighlightController implements vscode.Disposable {
     if (!pick) {
       return;
     }
-    if (pick.value === 'surviving') {
+    if (pick.value === 'projected') {
+      await this.addCommitFromHash(commitHash, false, 'projected-footprint');
+    } else if (pick.value === 'surviving') {
       await this.addCommitFromHash(commitHash, false);
     } else {
       await this.openExactPatchRevision(commitHash);
@@ -840,9 +843,12 @@ export class HighlightController implements vscode.Disposable {
     head: string,
     displayName: string,
     replace: boolean,
+    forceViewMode?: 'surviving-lines' | 'projected-footprint',
   ): Promise<void> {
-    let viewMode: 'exact-patch-revision' | 'surviving-lines';
-    if (full === head) {
+    let viewMode: 'exact-patch-revision' | 'surviving-lines' | 'projected-footprint';
+    if (forceViewMode) {
+      viewMode = forceViewMode;
+    } else if (full === head) {
       const clean = await this.isFileClean(repo, editor.document);
       if (!clean || editor.document.isDirty) {
         await vscode.window.showInformationMessage(
