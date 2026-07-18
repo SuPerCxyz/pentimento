@@ -39,6 +39,8 @@ const COMMAND_DEFS: readonly CommandDef[] = [
   [Commands.showDiagnostics, 'Show Diagnostics'],
   [Commands.setPatchColor, 'Set Patch Color'],
   [Commands.fetch, 'Fetch and Refresh'],
+  [Commands.highlightLineCommit, 'Highlight Current Line Commit'],
+  [Commands.revealHunk, 'Reveal Hunk'],
 ];
 
 /** 真实 handler:接收 controller 与命令参数。 */
@@ -80,6 +82,9 @@ const REAL_HANDLERS: Record<string, Handler> = {
   [Commands.managePatches]: (c) => c.managePatches(),
   [Commands.showDiagnostics]: (c) => c.showDiagnostics(),
   [Commands.closeExactWorkspace]: (c) => c.closeExactWorkspace(),
+  [Commands.highlightLineCommit]: (c) => c.highlightLineCommit(),
+  [Commands.revealHunk]: (c, ...args) =>
+    c.revealHunk(String(args[0] ?? ''), Number(args[1] ?? 1), Number(args[2] ?? 1)),
 };
 
 /**

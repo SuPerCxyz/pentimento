@@ -372,6 +372,68 @@ export class HighlightController implements vscode.Disposable {
     this.updateChrome();
   }
 
+  /**
+   * 右键高亮当前行所在提交:QuickPick 选「仅存活行」或「精确 Patch(打开工作区)」。
+   */
+  async highlightLineCommit(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      await vscode.window.showWarningMessage('Pentimento: 请先打开一个文件。');
+      return;
+    }
+    const repo = await this.repoResolver.resolveRepository(editor.document.uri.fsPath);
+    if (!repo) {
+      return;
+    }
+    if (editor.document.isDirty) {
+      await vscode.window.showWarningMessage('Pentimento: 请先保存当前文件以计算 blame。');
+      return;
+    }
+    const lineIdx = editor.selection.active.line;
+    let commitHash: string;
+    try {
+      const head = (
+        await this.git.runText(['rev-parse', 'HEAD'], { repositoryRoot: repo.root })
+      ).trim();
+      const blame = await this.getCachedBlame(repo.root, head, editor.document);
+      const bl = blame[lineIdx];
+      if (!bl) {
+        await vscode.window.showInformationMessage('Pentimento: 无法获取当前行提交。');
+        return;
+      }
+      commitHash = bl.commitHash;
+    } catch {
+      await vscode.window.showWarningMessage('Pentimento: 无法获取当前行 blame。');
+      return;
+    }
+    const modes = [
+      { label: '仅高亮存活行(当前版本仍存活)', value: 'surviving' },
+      { label: '切换到提交时 Patch(精确新增,打开工作区)', value: 'exact' },
+    ];
+    const pick = await vscode.window.showQuickPick(modes, {
+      placeHolder: `Pentimento: 选择「${commitHash.slice(0, 8)}」的高亮方式`,
+    });
+    if (!pick) {
+      return;
+    }
+    if (pick.value === 'surviving') {
+      await this.addCommitFromHash(commitHash, false);
+    } else {
+      await this.openExactPatchRevision(commitHash);
+    }
+  }
+
+  /** 打开文件并跳转到指定行范围(Hunk 点击)。 */
+  async revealHunk(file: string, startLine: number, endLine: number): Promise<void> {
+    const uri = vscode.Uri.file(file);
+    const doc = await vscode.workspace.openTextDocument(uri);
+    const editor = await vscode.window.showTextDocument(doc);
+    const start = Math.max(0, startLine - 1);
+    const end = Math.max(0, endLine - 1);
+    editor.revealRange(new vscode.Range(start, 0, end, 0), vscode.TextEditorRevealType.InCenter);
+    editor.selection = new vscode.Selection(start, 0, start, 0);
+  }
+
   private viewModeLabelOf(mode: HistoricalPatchViewMode): string {
     switch (mode) {
       case 'exact-patch-revision':

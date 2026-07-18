@@ -65,7 +65,9 @@
       { "command": "pentimento.showDiagnostics", "title": "Pentimento: 显示诊断" },
       { "command": "pentimento.setPatchColor", "title": "Pentimento: 设置 Patch 颜色" },
       { "command": "pentimento.fetch", "title": "Pentimento: Fetch 并刷新" },
-      { "command": "pentimento.refreshCommits", "title": "Pentimento: 刷新提交列表" }
+      { "command": "pentimento.refreshCommits", "title": "Pentimento: 刷新提交列表" },
+      { "command": "pentimento.highlightLineCommit", "title": "Pentimento: 高亮当前行提交(选模式)" },
+      { "command": "pentimento.revealHunk", "title": "Pentimento: 跳转到 Hunk" }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -134,7 +136,8 @@
         { "command": "pentimento.showDiagnostics", "when": "true" },
         { "command": "pentimento.setPatchColor", "when": "pentimento.hasActivePatches" },
         { "command": "pentimento.fetch", "when": "pentimento.enabled" },
-        { "command": "pentimento.refreshCommits", "when": "pentimento.enabled" }
+        { "command": "pentimento.refreshCommits", "when": "pentimento.enabled" },
+        { "command": "pentimento.highlightLineCommit", "when": "pentimento.enabled" }
       ],
       "view/title": [
         {
@@ -160,7 +163,7 @@
       ],
       "editor/context": [
         {
-          "command": "pentimento.highlightSurvivingLines",
+          "command": "pentimento.highlightLineCommit",
           "when": "editorTextFocus && pentimento.enabled",
           "group": "pentimento@1"
         }
@@ -189,7 +192,7 @@
     "configuration": {
       "title": "Pentimento",
       "properties": {
-        "pentimento.hover.enabled": { "type": "boolean", "default": true, "markdownDescription": "启用行级 Git Hover。" },
+        "pentimento.hover.enabled": { "type": "boolean", "default": false, "markdownDescription": "启用行级 Git Hover(默认关闭,改用右键高亮)。" },
         "pentimento.hover.delay": { "type": "number", "default": 300, "markdownDescription": "Hover 防抖延迟(毫秒)。", "minimum": 0 },
         "pentimento.hover.mode": { "type": "string", "enum": ["compact", "full", "disabled"], "default": "compact", "enumDescriptions": ["紧凑", "完整", "禁用"], "markdownDescription": "Hover 详细程度。" },
         "pentimento.compatibility.mode": { "type": "boolean", "default": true, "markdownDescription": "兼容模式:不显示行尾文字、CodeLens、InlayHint、Gutter 图标。" },

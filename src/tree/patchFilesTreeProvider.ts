@@ -59,9 +59,14 @@ class FileNode extends vscode.TreeItem {
 }
 
 class HunkNode extends vscode.TreeItem {
-  constructor(index: number, range: AddedLineRange) {
+  constructor(index: number, range: AddedLineRange, file: string) {
     super(`Hunk ${index} · 行 ${range.startLine}-${range.endLine}`, vscode.TreeItemCollapsibleState.None);
     this.tooltip = `Added lines ${range.startLine}-${range.endLine} (${range.endLine - range.startLine + 1} lines)`;
+    this.command = {
+      command: 'pentimento.revealHunk',
+      title: '跳转到行',
+      arguments: [file, range.startLine, range.endLine],
+    };
   }
 }
 
@@ -109,7 +114,8 @@ export class PatchFilesTreeProvider implements vscode.TreeDataProvider<PatchTree
       return element.layer.patch.files.map((f) => new FileNode(element.layer, f, element.repoRoot));
     }
     if (element instanceof FileNode) {
-      return element.file.originalAddedRanges.map((r, i) => new HunkNode(i + 1, r));
+      const abs = path.join(element.repoRoot, element.file.newPath ?? element.file.oldPath ?? '');
+      return element.file.originalAddedRanges.map((r, i) => new HunkNode(i + 1, r, abs));
     }
     return [];
   }
