@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none">
+  <!-- Pentimento: 三条等长线条,中间居中,上靠左,下靠右,与边缘留距,三色不透明 -->
+  <path d="M20 32h64" stroke="#5BE369" stroke-width="13" stroke-linecap="round"/>
+  <path d="M32 64h64" stroke="#58A6FF" stroke-width="13" stroke-linecap="round"/>
+  <path d="M44 96h64" stroke="#BC8CFF" stroke-width="13" stroke-linecap="round"/>
+</svg>
