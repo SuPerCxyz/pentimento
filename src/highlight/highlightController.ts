@@ -416,14 +416,23 @@ export class HighlightController implements vscode.Disposable {
   }
 
   /** 查当前行 commit 是否已高亮。 */
-  private findCurrentLineLayer(commitHash: string): PatchHighlightLayer | undefined {
+  /** 查当前行已高亮的 patch(按 membership,projected/surviving/exact 均可找到)。 */
+  private findCurrentLineLayer(): PatchHighlightLayer | undefined {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      return undefined;
+    }
+    const uri = editor.document.uri.toString();
+    const line = editor.selection.active.line + 1; // membership 1-based
+    const memberships = this.membership.getLine(uri, line);
+    if (memberships.length === 0) {
+      return undefined;
+    }
     const session = this.currentSession();
     if (!session) {
       return undefined;
     }
-    return [...session.patchLayers.values()].find(
-      (l) => l.patch.selection.commitHash === commitHash,
-    );
+    return session.patchLayers.get(memberships[0].patchId);
   }
 
   /**
@@ -431,15 +440,16 @@ export class HighlightController implements vscode.Disposable {
    * 已高亮则提示用「修改颜色」/「取消高亮」顶级命令。
    */
   async highlightLineCommit(): Promise<void> {
-    const commitHash = await this.getCurrentLineCommitHash();
-    if (!commitHash) {
+    const existing = this.findCurrentLineLayer();
+    if (existing) {
+      const hash = existing.patch.selection.commitHash?.slice(0, 8) ?? '';
+      await vscode.window.showInformationMessage(
+        `Pentimento: 当前行已高亮(${hash}),请使用「修改当前行所属提交高亮颜色」或「取消当前行所属提交高亮」。`,
+      );
       return;
     }
-    const existing = this.findCurrentLineLayer(commitHash);
-    if (existing) {
-      await vscode.window.showInformationMessage(
-        `Pentimento: 当前行已高亮(${commitHash.slice(0, 8)}),请使用「修改当前行高亮颜色」或「取消当前行高亮」。`,
-      );
+    const commitHash = await this.getCurrentLineCommitHash();
+    if (!commitHash) {
       return;
     }
     const modes = [
@@ -463,13 +473,9 @@ export class HighlightController implements vscode.Disposable {
     await vscode.commands.executeCommand('pentimento.refreshCommits');
   }
 
-  /** 右键「修改当前行高亮颜色」:仅对已高亮行生效。 */
+  /** 右键「修改当前行所属提交高亮颜色」:仅对已高亮行生效。 */
   async setPatchColorCurrentLine(): Promise<void> {
-    const commitHash = await this.getCurrentLineCommitHash();
-    if (!commitHash) {
-      return;
-    }
-    const existing = this.findCurrentLineLayer(commitHash);
+    const existing = this.findCurrentLineLayer();
     if (!existing) {
       await vscode.window.showInformationMessage('Pentimento: 当前行未高亮,无颜色可修改。');
       return;
@@ -478,13 +484,9 @@ export class HighlightController implements vscode.Disposable {
     await vscode.commands.executeCommand('pentimento.refreshCommits');
   }
 
-  /** 右键「取消当前行高亮」:移除当前行所属提交的高亮。 */
+  /** 右键「取消当前行所属提交高亮」:移除当前行所属提交的高亮。 */
   async removeCurrentLineHighlight(): Promise<void> {
-    const commitHash = await this.getCurrentLineCommitHash();
-    if (!commitHash) {
-      return;
-    }
-    const existing = this.findCurrentLineLayer(commitHash);
+    const existing = this.findCurrentLineLayer();
     if (!existing) {
       await vscode.window.showInformationMessage('Pentimento: 当前行未高亮。');
       return;
@@ -493,12 +495,13 @@ export class HighlightController implements vscode.Disposable {
     if (!session) {
       return;
     }
+    const hash = existing.patch.selection.commitHash?.slice(0, 8) ?? '';
     removePatch(session, existing.patchId);
     this.membership.removePatch(existing.patchId);
     await this.applyVisibleEditors();
     this.updateChrome();
     await vscode.commands.executeCommand('pentimento.refreshCommits');
-    await vscode.window.showInformationMessage(`Pentimento: 已取消高亮 ${commitHash.slice(0, 8)}`);
+    await vscode.window.showInformationMessage(`Pentimento: 已取消高亮 ${hash}`);
   }
 
   /** 打开文件并跳转到指定行范围(Hunk 点击)。 */

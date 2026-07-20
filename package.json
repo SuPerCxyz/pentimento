@@ -68,8 +68,8 @@
       { "command": "pentimento.fetch", "title": "Pentimento: Fetch 并刷新" },
       { "command": "pentimento.refreshCommits", "title": "Pentimento: 刷新提交列表" },
       { "command": "pentimento.highlightLineCommit", "title": "Pentimento: 高亮当前行所属提交" },
-      { "command": "pentimento.setPatchColorCurrentLine", "title": "Pentimento: 修改当前行高亮颜色" },
-      { "command": "pentimento.removeCurrentLineHighlight", "title": "Pentimento: 取消当前行高亮" },
+      { "command": "pentimento.setPatchColorCurrentLine", "title": "Pentimento: 修改当前行所属提交高亮颜色" },
+      { "command": "pentimento.removeCurrentLineHighlight", "title": "Pentimento: 取消当前行所属提交高亮" },
       { "command": "pentimento.revealHunk", "title": "Pentimento: 跳转到 Hunk" },
       { "command": "pentimento.toggleCommitHighlight", "title": "Pentimento: 切换提交高亮" }
     ],
