@@ -406,15 +406,42 @@ export class HighlightController implements vscode.Disposable {
       await vscode.window.showWarningMessage('Pentimento: 无法获取当前行 blame。');
       return;
     }
-    const modes = [
-      { label: '投影到当前版本(精准行号,保留当前修改)', value: 'projected' },
-      { label: '仅高亮存活行(当前版本仍存活)', value: 'surviving' },
-      { label: '切换到提交时 Patch(精确新增,打开工作区,原修改保留)', value: 'exact' },
-    ];
+    const session = this.currentSession();
+    const existing = session
+      ? [...session.patchLayers.values()].find((l) => l.patch.selection.commitHash === commitHash)
+      : undefined;
+    const modes = existing
+      ? [
+          { label: '修改高亮颜色', value: 'color' },
+          { label: '取消高亮(移除该提交)', value: 'remove' },
+        ]
+      : [
+          { label: '投影到当前版本(精准行号,保留当前修改)', value: 'projected' },
+          { label: '仅高亮存活行(当前版本仍存活)', value: 'surviving' },
+          { label: '切换到提交时 Patch(精确新增,打开工作区,原修改保留)', value: 'exact' },
+        ];
     const pick = await vscode.window.showQuickPick(modes, {
       placeHolder: `Pentimento: 选择「${commitHash.slice(0, 8)}」的高亮方式`,
     });
     if (!pick) {
+      return;
+    }
+    if (pick.value === 'color') {
+      if (existing) {
+        await this.setPatchColor(existing.patchId);
+        await vscode.commands.executeCommand('pentimento.refreshCommits');
+      }
+      return;
+    }
+    if (pick.value === 'remove') {
+      if (session && existing) {
+        removePatch(session, existing.patchId);
+        this.membership.removePatch(existing.patchId);
+        await this.applyVisibleEditors();
+        this.updateChrome();
+        await vscode.commands.executeCommand('pentimento.refreshCommits');
+        await vscode.window.showInformationMessage(`Pentimento: 已移除 ${commitHash.slice(0, 8)}`);
+      }
       return;
     }
     if (pick.value === 'projected') {
@@ -424,6 +451,7 @@ export class HighlightController implements vscode.Disposable {
     } else {
       await this.openExactPatchRevision(commitHash);
     }
+    await vscode.commands.executeCommand('pentimento.refreshCommits');
   }
 
   /** 打开文件并跳转到指定行范围(Hunk 点击)。 */
@@ -460,13 +488,14 @@ export class HighlightController implements vscode.Disposable {
         (l) => l.patch.selection.commitHash === commitHash,
       );
       if (layer) {
-        const nowEnabled = !layer.enabled;
-        setLayerEnabled(session, layer.patchId, nowEnabled);
+        // 已高亮:移除(取消高亮)
+        removePatch(session, layer.patchId);
+        this.membership.removePatch(layer.patchId);
         await this.applyVisibleEditors();
         this.updateChrome();
         await vscode.commands.executeCommand('pentimento.refreshCommits');
         await vscode.window.showInformationMessage(
-          `Pentimento:${nowEnabled ? '已显示' : '已隐藏'} ${commitHash.slice(0, 8)}`,
+          `Pentimento: 已取消高亮 ${commitHash.slice(0, 8)}`,
         );
         return;
       }

@@ -130,12 +130,12 @@ export const ColorIds = {
 
 /** 自定义 Patch 颜色预设(浅亮 hex,与图层默认色一致)。 */
 export const PATCH_COLOR_PRESETS: readonly { label: string; background: string; border: string }[] = [
-  { label: '绿 (Layer 1)', background: '#4ade8040', border: '#4ade80ff' },
-  { label: '青 (Layer 2)', background: '#22d3ee40', border: '#22d3eeff' },
-  { label: '蓝 (Layer 3)', background: '#60a5fa40', border: '#60a5faff' },
-  { label: '紫 (Layer 4)', background: '#a78bfa40', border: '#a78bfaff' },
-  { label: '粉 (Layer 5)', background: '#f472b640', border: '#f472b6ff' },
-  { label: '橙 (Layer 6)', background: '#fbbf2440', border: '#fbbf24ff' },
+  { label: '绿 (Layer 1)', background: '#4ade8066', border: '#4ade80ff' },
+  { label: '青 (Layer 2)', background: '#22d3ee66', border: '#22d3eeff' },
+  { label: '蓝 (Layer 3)', background: '#60a5fa66', border: '#60a5faff' },
+  { label: '紫 (Layer 4)', background: '#a78bfa66', border: '#a78bfaff' },
+  { label: '粉 (Layer 5)', background: '#f472b666', border: '#f472b6ff' },
+  { label: '橙 (Layer 6)', background: '#fbbf2466', border: '#fbbf24ff' },
 ];
 
 /** hex 颜色校验(支持 #RGB / #RRGGBB / #RRGGBBAA)。 */

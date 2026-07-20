@@ -3,6 +3,7 @@ import * as path from 'path';
 import type { HighlightSessionManager } from '../highlight/highlightSessionManager';
 import type { PatchHighlightLayer } from '../highlight/patchHighlightLayer';
 import type { PatchFileChange, AddedLineRange, HistoricalPatchViewMode } from '../patch/models';
+import { PATCH_COLOR_PRESETS } from '../constants';
 
 export type PatchTreeNode = PatchNode | FileNode | HunkNode | GroupNode;
 
@@ -28,6 +29,12 @@ class PatchNode extends vscode.TreeItem {
     this.description = `${viewModeLabel(layer.viewMode)} · ${layer.patch.totalAddedLines} 行`;
     this.tooltip = `${hash} · ${layer.label}\n${viewModeLabel(layer.viewMode)} · ${layer.patch.files.length} files · +${layer.patch.totalAddedLines}`;
     this.contextValue = isPrimary ? 'pentimento.primaryPatch' : 'pentimento.patch';
+    // 色块图标:颜色与代码行高亮一致(customColor 优先,否则 colorSlot 预设)
+    const colorHex =
+      layer.customColor?.border ??
+      PATCH_COLOR_PRESETS[layer.colorSlot % PATCH_COLOR_PRESETS.length].border;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><circle cx="8" cy="8" r="6" fill="${colorHex}"/></svg>`;
+    this.iconPath = vscode.Uri.parse(`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`);
   }
 }
 
