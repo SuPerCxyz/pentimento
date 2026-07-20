@@ -131,14 +131,14 @@ export const ColorIds = {
   ambiguousBorder: 'pentimento.ambiguousBorder',
 } as const;
 
-/** 自定义 Patch 颜色预设(浅亮 hex,与图层默认色一致)。 */
+/** 自定义 Patch 颜色预设(浅亮 hex,与图层默认色一致)。background alpha 0.7。 */
 export const PATCH_COLOR_PRESETS: readonly { label: string; background: string; border: string }[] = [
-  { label: '绿 (Layer 1)', background: '#4ade8066', border: '#4ade80ff' },
-  { label: '青 (Layer 2)', background: '#22d3ee66', border: '#22d3eeff' },
-  { label: '蓝 (Layer 3)', background: '#60a5fa66', border: '#60a5faff' },
-  { label: '紫 (Layer 4)', background: '#a78bfa66', border: '#a78bfaff' },
-  { label: '粉 (Layer 5)', background: '#f472b666', border: '#f472b6ff' },
-  { label: '橙 (Layer 6)', background: '#fbbf2466', border: '#fbbf24ff' },
+  { label: '绿 (Layer 1)', background: '#4ade80b3', border: '#4ade80ff' },
+  { label: '青 (Layer 2)', background: '#22d3eeb3', border: '#22d3eeff' },
+  { label: '蓝 (Layer 3)', background: '#60a5fab3', border: '#60a5faff' },
+  { label: '紫 (Layer 4)', background: '#a78bfab3', border: '#a78bfaff' },
+  { label: '粉 (Layer 5)', background: '#f472b6b3', border: '#f472b6ff' },
+  { label: '橙 (Layer 6)', background: '#fbbf24b3', border: '#fbbf24ff' },
 ];
 
 /** hex 颜色校验(支持 #RGB / #RRGGBB / #RRGGBBAA)。 */
