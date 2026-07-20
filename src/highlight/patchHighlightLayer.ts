@@ -14,6 +14,8 @@ export interface PatchHighlightLayer {
   customColor?: { background: string; border: string };
   label: string;
   createdAt: number;
+  /** 提交时间(authorTimestamp),用于按 patch 时间排序;无则回退 createdAt。 */
+  commitTime?: number;
 }
 
 /**

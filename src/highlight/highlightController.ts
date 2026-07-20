@@ -124,13 +124,16 @@ export class HighlightController implements vscode.Disposable {
     }
 
     let summary = full.slice(0, 8);
+    let commitTime: number | undefined;
     try {
-      summary = (await this.commitProvider.getCommitInfo(full, repo.root)).summary;
+      const info = await this.commitProvider.getCommitInfo(full, repo.root);
+      summary = info.summary;
+      commitTime = info.authorTimestamp;
     } catch {
       // 降级使用短哈希
     }
 
-    await this.resolveAndAdd(repo, editor, full, parent, head, summary, replace, forceViewMode);
+    await this.resolveAndAdd(repo, editor, full, parent, head, summary, replace, forceViewMode, commitTime);
   }
 
   async addRef(): Promise<void> {
@@ -201,13 +204,16 @@ export class HighlightController implements vscode.Disposable {
 
     const head = (await this.git.runText(['rev-parse', 'HEAD'], { repositoryRoot: repo.root })).trim();
     let summary = input;
+    let commitTime: number | undefined;
     try {
-      summary = (await this.commitProvider.getCommitInfo(patch, repo.root)).summary;
+      const info = await this.commitProvider.getCommitInfo(patch, repo.root);
+      summary = info.summary;
+      commitTime = info.authorTimestamp;
     } catch {
       // 降级
     }
 
-    await this.resolveAndAdd(repo, editor, patch, base, head, summary, false);
+    await this.resolveAndAdd(repo, editor, patch, base, head, summary, false, undefined, commitTime);
   }
 
   async addWorkingTree(): Promise<void> {
@@ -940,6 +946,7 @@ export class HighlightController implements vscode.Disposable {
     displayName: string,
     replace: boolean,
     forceViewMode?: 'surviving-lines' | 'projected-footprint',
+    commitTime?: number,
   ): Promise<void> {
     let viewMode: 'exact-patch-revision' | 'surviving-lines' | 'projected-footprint';
     if (forceViewMode) {
@@ -977,13 +984,14 @@ export class HighlightController implements vscode.Disposable {
       displayName,
       viewMode,
     };
-    await this.buildAndAddPatch(repo, selection, replace);
+    await this.buildAndAddPatch(repo, selection, replace, commitTime);
   }
 
   private async buildAndAddPatch(
     repo: Repository,
     selection: PatchSelection,
     replace: boolean,
+    commitTime?: number,
   ): Promise<void> {
     let patch;
     try {
@@ -1003,6 +1011,7 @@ export class HighlightController implements vscode.Disposable {
     const res = addPatch(session, repo.repositoryId, patch, {
       replace,
       maxActive: DEFAULT_MAX_ACTIVE_PATCHES,
+      commitTime,
     });
     if (res.reason === 'limit-exceeded') {
       await vscode.window.showWarningMessage(

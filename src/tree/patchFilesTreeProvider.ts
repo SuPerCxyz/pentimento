@@ -151,8 +151,11 @@ function sortLayerEntries(entries: LayerEntry[], sortBy: SortBy): void {
       break;
     case 'added':
     default:
-      // 新添加的靠前(降序),与提交列表「后选的更新 patch 在上」一致
-      entries.sort((a, b) => b.layer.createdAt - a.layer.createdAt);
+      // 按 patch 时间(commitTime)降序,最新 patch 在顶部;无 commitTime 回退添加时间
+      entries.sort(
+        (a, b) =>
+          (b.layer.commitTime ?? b.layer.createdAt) - (a.layer.commitTime ?? a.layer.createdAt),
+      );
       break;
   }
 }

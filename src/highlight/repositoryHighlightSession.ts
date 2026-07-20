@@ -40,6 +40,7 @@ export type AddPatchReason = 'ok' | 'limit-exceeded' | 'display-revision-mismatc
 export interface AddPatchOptions {
   replace?: boolean;
   maxActive?: number;
+  commitTime?: number;
 }
 
 export interface AddPatchResult {
@@ -110,6 +111,7 @@ export function addPatch(
     colorSlot,
     label: patch.selection.displayName,
     createdAt: Date.now(),
+    commitTime: opts.commitTime,
   };
   session.patchLayers.set(patchId, layer);
   if (!session.primaryPatchId) {
