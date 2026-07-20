@@ -43,8 +43,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
       - name: Integration tests (VSCode via test-electron)
-        run: xvfb-run -a npm test
+        run: timeout 300 xvfb-run -a npm test
         continue-on-error: true
+        timeout-minutes: 6
 
       - name: Package VSIX
         run: npm run package
