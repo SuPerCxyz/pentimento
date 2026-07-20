@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import type { HighlightSessionManager } from '../highlight/highlightSessionManager';
+import type { RepositoryHighlightSession } from '../highlight/repositoryHighlightSession';
+import type { RepositoryResolver, Repository } from '../git/repositoryResolver';
 import type { PatchHighlightLayer } from '../highlight/patchHighlightLayer';
 import type { PatchFileChange, AddedLineRange, HistoricalPatchViewMode } from '../patch/models';
 import { PATCH_COLOR_PRESETS } from '../constants';
@@ -86,7 +88,10 @@ export class PatchFilesTreeProvider implements vscode.TreeDataProvider<PatchTree
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<PatchTreeNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  constructor(private readonly sessionManager: HighlightSessionManager) {}
+  constructor(
+    private readonly sessionManager: HighlightSessionManager,
+    private readonly repoResolver: RepositoryResolver,
+  ) {}
 
   refresh(): void {
     this._onDidChangeTreeData.fire(undefined);
@@ -96,18 +101,20 @@ export class PatchFilesTreeProvider implements vscode.TreeDataProvider<PatchTree
     return element;
   }
 
-  getChildren(element?: PatchTreeNode): PatchTreeNode[] {
+  async getChildren(element?: PatchTreeNode): Promise<PatchTreeNode[]> {
     if (!element) {
       const entries: LayerEntry[] = [];
-      for (const s of this.sessionManager.allSessions()) {
-        for (const layer of s.patchLayers.values()) {
+      // 只展示提交列表所属 repo 的 patch(与 CommitListTreeProvider 一致的 repo 解析)
+      const session = await this.resolveSession();
+      if (session) {
+        for (const layer of session.patchLayers.values()) {
           if (!layer.enabled) {
             continue; // 隐藏的 patch 不显示在补丁图层
           }
           entries.push({
             layer,
-            root: s.repositoryRoot,
-            isPrimary: s.primaryPatchId === layer.patchId,
+            root: session.repositoryRoot,
+            isPrimary: session.primaryPatchId === layer.patchId,
           });
         }
       }
@@ -128,6 +135,33 @@ export class PatchFilesTreeProvider implements vscode.TreeDataProvider<PatchTree
       return element.file.originalAddedRanges.map((r, i) => new HunkNode(i + 1, r, abs));
     }
     return [];
+  }
+
+  /** 与提交列表一致:active editor 优先,否则第一个 workspace folder。 */
+  private async resolveSession(): Promise<RepositoryHighlightSession | undefined> {
+    const repo = await this.resolveRepo();
+    if (!repo) {
+      return undefined;
+    }
+    return this.sessionManager.getSession(repo.root);
+  }
+
+  private async resolveRepo(): Promise<Repository | undefined> {
+    const editor = vscode.window.activeTextEditor;
+    if (editor) {
+      const r = await this.repoResolver.resolveRepository(editor.document.uri.fsPath);
+      if (r) {
+        return r;
+      }
+    }
+    const folders = vscode.workspace.workspaceFolders;
+    if (folders && folders.length > 0) {
+      const r = await this.repoResolver.resolveRepository(folders[0].uri.fsPath);
+      if (r) {
+        return r;
+      }
+    }
+    return undefined;
   }
 
   private sortBy(): SortBy {

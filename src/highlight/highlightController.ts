@@ -538,8 +538,9 @@ export class HighlightController implements vscode.Disposable {
    * 提交列表点击调用;变更后刷新提交列表以更新色块/状态。
    */
   async toggleCommitHighlight(commitHash: string): Promise<void> {
-    const session = this.currentSession();
-    if (session) {
+    // 跨所有 session 查找:提交列表所属 repo 可能与 currentSession() 不一致
+    // (多仓库 / active editor 不在该 repo 时),必须按 commitHash 定位所属 session
+    for (const session of this.sessionManager.allSessions()) {
       const layer = [...session.patchLayers.values()].find(
         (l) => l.patch.selection.commitHash === commitHash,
       );

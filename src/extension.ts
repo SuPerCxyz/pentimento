@@ -92,7 +92,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const fetchService = new FetchService(git);
 
   // 树视图
-  const treeProvider = new PatchFilesTreeProvider(sessionManager);
+  const treeProvider = new PatchFilesTreeProvider(sessionManager, repoResolver);
   context.subscriptions.push(vscode.window.registerTreeDataProvider(VIEW_ID, treeProvider));
 
   const commitListProvider = new CommitListTreeProvider(commitProvider, repoResolver, sessionManager);
@@ -124,7 +124,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     storageRoot,
   );
   context.subscriptions.push(controller);
-  const editorTracker = new EditorTracker(controller);
+  const editorTracker = new EditorTracker(controller, treeProvider, commitListProvider);
   context.subscriptions.push(editorTracker);
 
   // Hover
