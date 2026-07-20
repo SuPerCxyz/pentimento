@@ -71,9 +71,36 @@ export class CommitListTreeProvider implements vscode.TreeDataProvider<CommitNod
     const session = this.sessionManager.getSession(repo.root);
     let commits: GitCommitInfo[];
     try {
-      commits = await this.commitProvider.listCommits(repo.root);
+      const limit = vscode.workspace.getConfiguration('pentimento').get<number>(
+        'commitList.maxCommits',
+        1000,
+      );
+      commits = await this.commitProvider.listCommits(repo.root, limit);
     } catch {
       return [];
+    }
+    // 补充已高亮但不在 HEAD 历史中的提交
+    // (跨分支 / 超过 maxCommits / fetch 后未合并到 HEAD 的 patch 提交)
+    if (session && session.patchLayers.size > 0) {
+      const existing = new Set(commits.map((c) => c.commitHash));
+      const missingHashes = new Set<string>();
+      for (const layer of session.patchLayers.values()) {
+        const hash = layer.patch.selection.commitHash;
+        if (hash && !existing.has(hash) && !missingHashes.has(hash)) {
+          missingHashes.add(hash);
+        }
+      }
+      for (const hash of missingHashes) {
+        try {
+          const info = await this.commitProvider.getCommitInfo(hash, repo.root);
+          commits.push(info);
+          existing.add(hash);
+        } catch {
+          // 提交不存在或解析失败,跳过
+        }
+      }
+      // 合并后按 authorTimestamp 降序,保持最新在上
+      commits.sort((a, b) => b.authorTimestamp - a.authorTimestamp);
     }
     return commits.map((c) => {
       const layer = session

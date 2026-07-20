@@ -98,7 +98,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const commitListProvider = new CommitListTreeProvider(commitProvider, repoResolver, sessionManager);
   context.subscriptions.push(vscode.window.registerTreeDataProvider(VIEW_COMMITS_ID, commitListProvider));
   context.subscriptions.push(
-    vscode.commands.registerCommand(Commands.refreshCommits, () => commitListProvider.refresh()),
+    vscode.commands.registerCommand(Commands.refreshCommits, () => {
+      commitListProvider.refresh();
+      treeProvider.refresh();
+    }),
   );
 
   // 高亮控制器 + 编辑器跟踪

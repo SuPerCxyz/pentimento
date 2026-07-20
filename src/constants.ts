@@ -101,6 +101,7 @@ export const ConfigKeys = {
   largePatchMaxFiles: 'pentimento.largePatch.maxFiles',
   largePatchMaxAddedLines: 'pentimento.largePatch.maxAddedLines',
   gitAutoFetchEnabled: 'pentimento.git.autoFetch.enabled',
+  commitListMaxCommits: 'pentimento.commitList.maxCommits',
   gitAutoFetchInterval: 'pentimento.git.autoFetch.intervalMinutes',
   gitTimeout: 'pentimento.git.timeout',
   gitMaxConcurrentCommands: 'pentimento.git.maxConcurrentCommands',

@@ -237,6 +237,7 @@
         "pentimento.largePatch.maxAddedLines": { "type": "number", "default": 20000, "minimum": 1, "markdownDescription": "单个 Patch 最多分析的新增行数(超出截断)。" },
         "pentimento.git.autoFetch.enabled": { "type": "boolean", "default": false, "markdownDescription": "启用后台自动 fetch(仅 fetch,不切换分支/不改工作区)。" },
         "pentimento.git.autoFetch.intervalMinutes": { "type": "number", "default": 30, "minimum": 1, "markdownDescription": "后台自动 fetch 间隔(分钟)。" },
+        "pentimento.commitList.maxCommits": { "type": "number", "default": 1000, "minimum": 1, "markdownDescription": "提交列表最多加载的提交数(超出截断;设大可显示更多)。" },
         "pentimento.git.timeout": { "type": "number", "default": 30000, "minimum": 1000, "markdownDescription": "Git 命令超时(毫秒)。" },
         "pentimento.git.maxConcurrentCommands": { "type": "number", "default": 4, "minimum": 1, "maximum": 32, "markdownDescription": "最大并发 Git 命令数。" },
         "pentimento.git.maxOutputBytes": { "type": "number", "default": 52428800, "minimum": 1024, "markdownDescription": "Git 命令最大输出字节数。" },
