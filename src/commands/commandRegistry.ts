@@ -42,6 +42,8 @@ const COMMAND_DEFS: readonly CommandDef[] = [
   [Commands.highlightLineCommit, 'Highlight Current Line Commit'],
   [Commands.revealHunk, 'Reveal Hunk'],
   [Commands.toggleCommitHighlight, 'Toggle Commit Highlight'],
+  [Commands.setPatchColorCurrentLine, 'Set Current Line Patch Color'],
+  [Commands.removeCurrentLineHighlight, 'Remove Current Line Highlight'],
 ];
 
 /** 真实 handler:接收 controller 与命令参数。 */
@@ -87,6 +89,8 @@ const REAL_HANDLERS: Record<string, Handler> = {
   [Commands.revealHunk]: (c, ...args) =>
     c.revealHunk(String(args[0] ?? ''), Number(args[1] ?? 1), Number(args[2] ?? 1)),
   [Commands.toggleCommitHighlight]: (c, ...args) => c.toggleCommitHighlight(String(args[0] ?? '')),
+  [Commands.setPatchColorCurrentLine]: (c) => c.setPatchColorCurrentLine(),
+  [Commands.removeCurrentLineHighlight]: (c) => c.removeCurrentLineHighlight(),
 };
 
 /**

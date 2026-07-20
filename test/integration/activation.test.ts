@@ -15,10 +15,10 @@ suite('Pentimento activation', () => {
     expect(ext!.isActive, 'extension should be active').to.be.true;
   });
 
-  test('all 37 commands are registered', async () => {
+  test('all 39 commands are registered', async () => {
     const cmds = await vscode.commands.getCommands(true);
     const ids = Object.values(Commands) as string[];
-    expect(ids).to.have.lengthOf(37);
+    expect(ids).to.have.lengthOf(39);
     for (const id of ids) {
       expect(cmds, `command not registered: ${id}`).to.include(id);
     }

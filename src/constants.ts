@@ -60,6 +60,8 @@ export const Commands = {
   highlightLineCommit: 'pentimento.highlightLineCommit',
   revealHunk: 'pentimento.revealHunk',
   toggleCommitHighlight: 'pentimento.toggleCommitHighlight',
+  setPatchColorCurrentLine: 'pentimento.setPatchColorCurrentLine',
+  removeCurrentLineHighlight: 'pentimento.removeCurrentLineHighlight',
   fetch: 'pentimento.fetch',
   clearAll: 'pentimento.clearAll',
   switchHistoricalViewMode: 'pentimento.switchHistoricalViewMode',

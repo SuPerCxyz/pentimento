@@ -329,7 +329,17 @@ export class HighlightController implements vscode.Disposable {
     }
     const clearItem: vscode.QuickPickItem = { label: '清除自定义颜色', description: '使用图层默认色' };
     const customItem: vscode.QuickPickItem = { label: '自定义 hex…' };
-    const presetItems = PATCH_COLOR_PRESETS.map((p) => ({
+    const usedBorders = new Set<string>();
+    for (const l of session.patchLayers.values()) {
+      if (l.patchId === targetId) {
+        continue;
+      }
+      const b =
+        l.customColor?.border ??
+        PATCH_COLOR_PRESETS[l.colorSlot % PATCH_COLOR_PRESETS.length].border;
+      usedBorders.add(b);
+    }
+    const presetItems = PATCH_COLOR_PRESETS.filter((p) => !usedBorders.has(p.border)).map((p) => ({
       label: p.label,
       background: p.background,
       border: p.border,
@@ -372,25 +382,22 @@ export class HighlightController implements vscode.Disposable {
     this.updateChrome();
   }
 
-  /**
-   * 右键高亮当前行所在提交:QuickPick 选「仅存活行」或「精确 Patch(打开工作区)」。
-   */
-  async highlightLineCommit(): Promise<void> {
+  /** 获取当前行所属提交 hash(右键命令共用)。 */
+  private async getCurrentLineCommitHash(): Promise<string | undefined> {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
       await vscode.window.showWarningMessage('Pentimento: 请先打开一个文件。');
-      return;
+      return undefined;
     }
     const repo = await this.repoResolver.resolveRepository(editor.document.uri.fsPath);
     if (!repo) {
-      return;
+      return undefined;
     }
     if (editor.document.isDirty) {
       await vscode.window.showWarningMessage('Pentimento: 请先保存当前文件以计算 blame。');
-      return;
+      return undefined;
     }
     const lineIdx = editor.selection.active.line;
-    let commitHash: string;
     try {
       const head = (
         await this.git.runText(['rev-parse', 'HEAD'], { repositoryRoot: repo.root })
@@ -399,49 +406,51 @@ export class HighlightController implements vscode.Disposable {
       const bl = blame[lineIdx];
       if (!bl) {
         await vscode.window.showInformationMessage('Pentimento: 无法获取当前行提交。');
-        return;
+        return undefined;
       }
-      commitHash = bl.commitHash;
+      return bl.commitHash;
     } catch {
       await vscode.window.showWarningMessage('Pentimento: 无法获取当前行 blame。');
+      return undefined;
+    }
+  }
+
+  /** 查当前行 commit 是否已高亮。 */
+  private findCurrentLineLayer(commitHash: string): PatchHighlightLayer | undefined {
+    const session = this.currentSession();
+    if (!session) {
+      return undefined;
+    }
+    return [...session.patchLayers.values()].find(
+      (l) => l.patch.selection.commitHash === commitHash,
+    );
+  }
+
+  /**
+   * 右键「高亮当前行所属提交」:未高亮时选添加方式(投影/存活/精确);
+   * 已高亮则提示用「修改颜色」/「取消高亮」顶级命令。
+   */
+  async highlightLineCommit(): Promise<void> {
+    const commitHash = await this.getCurrentLineCommitHash();
+    if (!commitHash) {
       return;
     }
-    const session = this.currentSession();
-    const existing = session
-      ? [...session.patchLayers.values()].find((l) => l.patch.selection.commitHash === commitHash)
-      : undefined;
-    const modes = existing
-      ? [
-          { label: '修改高亮颜色', value: 'color' },
-          { label: '取消高亮(移除该提交)', value: 'remove' },
-        ]
-      : [
-          { label: '投影到当前版本(精准行号,保留当前修改)', value: 'projected' },
-          { label: '仅高亮存活行(当前版本仍存活)', value: 'surviving' },
-          { label: '切换到提交时 Patch(精确新增,打开工作区,原修改保留)', value: 'exact' },
-        ];
+    const existing = this.findCurrentLineLayer(commitHash);
+    if (existing) {
+      await vscode.window.showInformationMessage(
+        `Pentimento: 当前行已高亮(${commitHash.slice(0, 8)}),请使用「修改当前行高亮颜色」或「取消当前行高亮」。`,
+      );
+      return;
+    }
+    const modes = [
+      { label: '投影到当前版本(精准行号,保留当前修改)', value: 'projected' },
+      { label: '仅高亮存活行(当前版本仍存活)', value: 'surviving' },
+      { label: '切换到提交时 Patch(精确新增,打开工作区,原修改保留)', value: 'exact' },
+    ];
     const pick = await vscode.window.showQuickPick(modes, {
       placeHolder: `Pentimento: 选择「${commitHash.slice(0, 8)}」的高亮方式`,
     });
     if (!pick) {
-      return;
-    }
-    if (pick.value === 'color') {
-      if (existing) {
-        await this.setPatchColor(existing.patchId);
-        await vscode.commands.executeCommand('pentimento.refreshCommits');
-      }
-      return;
-    }
-    if (pick.value === 'remove') {
-      if (session && existing) {
-        removePatch(session, existing.patchId);
-        this.membership.removePatch(existing.patchId);
-        await this.applyVisibleEditors();
-        this.updateChrome();
-        await vscode.commands.executeCommand('pentimento.refreshCommits');
-        await vscode.window.showInformationMessage(`Pentimento: 已移除 ${commitHash.slice(0, 8)}`);
-      }
       return;
     }
     if (pick.value === 'projected') {
@@ -452,6 +461,44 @@ export class HighlightController implements vscode.Disposable {
       await this.openExactPatchRevision(commitHash);
     }
     await vscode.commands.executeCommand('pentimento.refreshCommits');
+  }
+
+  /** 右键「修改当前行高亮颜色」:仅对已高亮行生效。 */
+  async setPatchColorCurrentLine(): Promise<void> {
+    const commitHash = await this.getCurrentLineCommitHash();
+    if (!commitHash) {
+      return;
+    }
+    const existing = this.findCurrentLineLayer(commitHash);
+    if (!existing) {
+      await vscode.window.showInformationMessage('Pentimento: 当前行未高亮,无颜色可修改。');
+      return;
+    }
+    await this.setPatchColor(existing.patchId);
+    await vscode.commands.executeCommand('pentimento.refreshCommits');
+  }
+
+  /** 右键「取消当前行高亮」:移除当前行所属提交的高亮。 */
+  async removeCurrentLineHighlight(): Promise<void> {
+    const commitHash = await this.getCurrentLineCommitHash();
+    if (!commitHash) {
+      return;
+    }
+    const existing = this.findCurrentLineLayer(commitHash);
+    if (!existing) {
+      await vscode.window.showInformationMessage('Pentimento: 当前行未高亮。');
+      return;
+    }
+    const session = this.currentSession();
+    if (!session) {
+      return;
+    }
+    removePatch(session, existing.patchId);
+    this.membership.removePatch(existing.patchId);
+    await this.applyVisibleEditors();
+    this.updateChrome();
+    await vscode.commands.executeCommand('pentimento.refreshCommits');
+    await vscode.window.showInformationMessage(`Pentimento: 已取消高亮 ${commitHash.slice(0, 8)}`);
   }
 
   /** 打开文件并跳转到指定行范围(Hunk 点击)。 */
@@ -1027,6 +1074,44 @@ export class HighlightController implements vscode.Disposable {
           const targets = await this.getTargetCommits(layer, repo.root);
           const ranges = findSurvivingRanges(blame, targets);
           this.membership.applyRanges(uri, layer.patchId, ranges, 'surviving', 'high');
+          // 被后续修改的行:modified 装饰提示(代码上提示用户该行已被新提交修改)
+          const patchRev = layer.patch.selection.patchRevision;
+          const filePath = file.newPath ?? file.oldPath;
+          if (patchRev && filePath && patchRev !== session.displayRevision) {
+            try {
+              const diff = await this.getCachedPatchDisplayDiff(
+                repo.root,
+                patchRev,
+                session.displayRevision,
+                filePath,
+              );
+              const projected = projectRanges(diff, file.originalAddedRanges);
+              const modifiedRanges: { startLine: number; endLine: number }[] = [];
+              for (const p of projected) {
+                if (
+                  p.status === 'modified' &&
+                  p.currentStartLine !== undefined &&
+                  p.currentEndLine !== undefined
+                ) {
+                  modifiedRanges.push({
+                    startLine: p.currentStartLine,
+                    endLine: p.currentEndLine,
+                  });
+                }
+              }
+              if (modifiedRanges.length > 0) {
+                this.membership.applyRanges(
+                  uri,
+                  layer.patchId,
+                  modifiedRanges,
+                  'modified',
+                  'medium',
+                );
+              }
+            } catch {
+              // diff 不可用:跳过 modified 提示
+            }
+          }
         } catch {
           // blame 失败(二进制等)跳过
         }
